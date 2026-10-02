@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Restaurante Display</title>
+    <title>MR. Pizza - TV Display</title>
     <style>
         /* Reset e Base */
         * {
@@ -58,7 +58,38 @@
             max-height: 100%;
         }
 
-        /* Mensagem de Erro (visível apenas se falhar o carregamento) */
+        /* Overlay de Carregamento */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            color: white;
+            transition: opacity 0.5s ease-out;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(255, 255, 255, 0.3);
+            border-top: 5px solid #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
         .error-message {
             color: #fff;
             font-size: 2rem;
@@ -72,10 +103,17 @@
 
     <div class="display-container" id="displayArea">
         <!-- O conteúdo será injetado via JS -->
+        <div class="loading-overlay" id="loader">
+            <div class="spinner"></div>
+            <p>A carregar conteúdo...</p>
+        </div>
     </div>
 
     <script>
-        // Configuração: Substitua pelos seus links RAW do GitHub
+        // =========================================================================
+        // CONFIGURAÇÃO DE ASSETS
+        // Substitua estes links se mover os ficheiros para outro CDN no futuro
+        // =========================================================================
         const ASSETS = {
             video: "https://raw.githubusercontent.com/AndreSF2000/ementa-mrpizza/main/menus-mr-ermesinde-out-2026.mp4",
             price: "https://raw.githubusercontent.com/AndreSF2000/ementa-mrpizza/main/menu-tv-fixo.png"
@@ -86,6 +124,12 @@
         const params = new URLSearchParams(window.location.search);
         const mode = params.get('mode') || 'video';
         const displayArea = document.getElementById('displayArea');
+        const loader = document.getElementById('loader');
+
+        function hideLoader() {
+            loader.style.opacity = '0';
+            setTimeout(() => loader.remove(), 500);
+        }
 
         function initDisplay() {
             if (mode === 'video') {
@@ -100,53 +144,96 @@
         function renderVideo() {
             const video = document.createElement('video');
             
-            // Atributos críticos para TVs
+            // Atributos críticos para TVs e desempenho
             video.src = ASSETS.video;
             video.autoplay = true;
             video.loop = true;
-            video.muted = true; // Necessário para autoplay funcionar em alguns navegadores
+            video.muted = true; // Necessário para autoplay funcionar em todos os navegadores
             video.playsInline = true; // Evita fullscreen nativo no iOS/Safari
+            video.preload = 'auto'; // Baixa o vídeo antes de começar (reduz stuttering inicial)
+            video.crossOrigin = 'anonymous'; // Permite melhor cache em CDNs
+            
             video.setAttribute('playsinline', '');
             video.setAttribute('controls', 'false');
-            
-            // Fallback para se o vídeo falhar (ex: codec não suportado)
+            video.setAttribute('disableRemotePlayback', 'true');
+
+            // Lógica de Recuperação de Travamentos (Stuttering Handler)
+            let stallCount = 0;
+            const maxStallsBeforeReload = 3;
+
+            video.addEventListener('stalled', () => {
+                console.log('Video stalled, attempting recovery...');
+                stallCount++;
+                
+                if (stallCount >= maxStallsBeforeReload) {
+                    console.log('Multiple stalls detected, forcing buffer reload');
+                    const currentTime = video.currentTime;
+                    // Forçar reload do buffer saltando 0.1s para trás/frente
+                    video.currentTime = Math.max(0, currentTime - 0.1);
+                    video.play().catch(() => {});
+                    stallCount = 0; // Resetar contador
+                }
+            });
+
+            // Resetar contador de stalls se o vídeo estiver a correr bem
+            video.addEventListener('timeupdate', () => {
+                if (stallCount > 0) {
+                    stallCount = 0;
+                }
+            });
+
+            // Fallback para se o vídeo falhar (ex: codec não suportado ou erro de rede grave)
             video.onerror = () => {
                 console.error("Erro ao carregar vídeo");
-                showError("Erro ao carregar vídeo. Verifique o link.");
+                showError("Erro ao carregar vídeo. Verifique a internet.");
             };
-
-            // Adicionar um segundo source como fallback (opcional, mas recomendado)
-            // Ex: Se o MP4 não funcionar, tenta WebM
-            // const source1 = document.createElement('source');
-            // source1.src = ASSETS.video;
-            // source1.type = 'video/mp4';
-            // video.appendChild(source1);
 
             displayArea.appendChild(video);
 
-            // Forçar o início do vídeo (alguns navegadores bloqueiam autoplay inicial)
-            video.play().catch(error => console.log("Autoplay bloqueado, tentando retry", error));
+            // Esconder loader quando o vídeo estiver pronto para reproduzir
+            video.addEventListener('canplay', hideLoader);
+            video.addEventListener('loadeddata', hideLoader);
+
+            // Forçar o início do vídeo
+            video.play().catch(error => {
+                console.log("Autoplay inicial bloqueado, tentando novamente em 500ms", error);
+                setTimeout(() => {
+                    video.play().catch(e => console.error("Autoplay falhou definitivamente", e));
+                }, 500);
+            });
         }
 
         function renderPrice() {
             const img = document.createElement('img');
             img.src = ASSETS.price;
-            img.alt = "Preçário";
+            img.alt = "Preçário MR. Pizza";
             img.className = 'price-sheet';
+            img.crossOrigin = 'anonymous';
 
             img.onerror = () => {
                 showError("Erro ao carregar preçário.");
             };
 
+            img.onload = hideLoader;
+
             displayArea.appendChild(img);
         }
 
         function showError(message) {
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'error-message';
-            errorDiv.innerHTML = `<h1>⚠️ ${message}</h1><p>Tente recarregar a página.</p>`;
-            displayArea.innerHTML = ''; // Limpa a área
-            displayArea.appendChild(errorDiv);
+            loader.innerHTML = `
+                <div style="text-align: center;">
+                    <h1 style="font-size: 3rem; margin-bottom: 1rem;">⚠️</h1>
+                    <h2 style="font-size: 1.5rem; margin-bottom: 0.5rem;">${message}</h2>
+                    <p style="font-size: 1rem; opacity: 0.7;">A tentar recarregar automaticamente em 10 segundos...</p>
+                </div>
+            `;
+            loader.style.opacity = '1';
+            loader.style.display = 'flex';
+            
+            // Auto-recovery: tentar recarregar a página em 10s se houver erro crítico
+            setTimeout(() => {
+                window.location.reload();
+            }, 10000);
         }
 
         // Inicializar
@@ -154,10 +241,9 @@
 
         // Re-renderizar se a orientação da TV mudar (ex: TV gira)
         window.addEventListener('resize', () => {
-            // O CSS object-fit já trata disso, mas garantimos que o vídeo esteja tocando
             const video = document.querySelector('video');
             if (video && video.paused) {
-                video.play();
+                video.play().catch(() => {});
             }
         });
     </script>
