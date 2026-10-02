@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MR. Pizza - TV Display</title>
     <style>
-        /* Reset e Base */
         * {
             margin: 0;
             padding: 0;
@@ -15,12 +14,12 @@
         html, body {
             width: 100%;
             height: 100%;
-            background-color: #000; /* Fundo preto para contraste */
-            overflow: hidden; /* Evita scrollbars na TV */
+            background-color: #000;
+            overflow: hidden;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            cursor: none;
         }
 
-        /* Container Principal */
         .display-container {
             width: 100vw;
             height: 100vh;
@@ -28,37 +27,26 @@
             justify-content: center;
             align-items: center;
             position: relative;
+            /* A cor será definida via JS na variável --bg-color */
+            background-color: var(--bg-color, #000); 
         }
 
-        /* Estilo para Vídeo */
         video {
-            /* object-fit: cover garante que o vídeo preenche a tela inteira 
-               cortando as bordas se necessário, mas mantendo a proporção. 
-               É a melhor opção para TVs de diferentes tamanhos. */
             width: 100%;
             height: 100%;
-            object-fit: cover; 
+            object-fit: cover;
             background-color: #000;
+            pointer-events: none;
         }
 
-        /* Estilo para Imagem (Preçário) */
         img.price-sheet {
-            /* object-fit: contain para o preçário. 
-               É melhor "contain" aqui porque preçários têm texto. 
-               Se usarmos "cover", o texto pode ser cortado. 
-               O preto ao redor fica elegante. */
             width: 100%;
             height: 100%;
             object-fit: contain;
             object-position: center;
-            background-color: #000;
-            /* Opcional: adicionar um leve padding para não tocar nas bordas */
-            padding: 2%;
-            max-width: 100%;
-            max-height: 100%;
+            background-color: transparent;
         }
 
-        /* Overlay de Carregamento */
         .loading-overlay {
             position: absolute;
             top: 0;
@@ -102,7 +90,6 @@
 <body>
 
     <div class="display-container" id="displayArea">
-        <!-- O conteúdo será injetado via JS -->
         <div class="loading-overlay" id="loader">
             <div class="spinner"></div>
             <p>A carregar conteúdo...</p>
@@ -110,21 +97,22 @@
     </div>
 
     <script>
-        // =========================================================================
-        // CONFIGURAÇÃO DE ASSETS
-        // Substitua estes links se mover os ficheiros para outro CDN no futuro
-        // =========================================================================
         const ASSETS = {
             video: "https://raw.githubusercontent.com/AndreSF2000/ementa-mrpizza/main/menus-mr-ermesinde-out-2026.mp4",
             price: "https://raw.githubusercontent.com/AndreSF2000/ementa-mrpizza/main/menu-tv-fixo.png"
         };
 
-        // Determinar o modo via URL (?mode=video ou ?mode=price)
-        // Se não houver parâmetro, assume "video" por padrão
         const params = new URLSearchParams(window.location.search);
         const mode = params.get('mode') || 'video';
+        
+        // Cor de fundo: padrão preto (000000). Pode ser alterado via ?bg=RRGGBB
+        const bgColor = params.get('bg') || '000000'; 
+
         const displayArea = document.getElementById('displayArea');
         const loader = document.getElementById('loader');
+
+        // Aplicar a cor de fundo personalizada
+        document.documentElement.style.setProperty('--bg-color', `#${bgColor}`);
 
         function hideLoader() {
             loader.style.opacity = '0';
@@ -143,63 +131,45 @@
 
         function renderVideo() {
             const video = document.createElement('video');
-            
-            // Atributos críticos para TVs e desempenho
             video.src = ASSETS.video;
             video.autoplay = true;
             video.loop = true;
-            video.muted = true; // Necessário para autoplay funcionar em todos os navegadores
-            video.playsInline = true; // Evita fullscreen nativo no iOS/Safari
-            video.preload = 'auto'; // Baixa o vídeo antes de começar (reduz stuttering inicial)
-            video.crossOrigin = 'anonymous'; // Permite melhor cache em CDNs
-            
+            video.muted = true;
+            video.playsInline = true;
+            video.preload = 'auto';
+            video.crossOrigin = 'anonymous';
             video.setAttribute('playsinline', '');
             video.setAttribute('controls', 'false');
             video.setAttribute('disableRemotePlayback', 'true');
+            video.setAttribute('disablePictureInPicture', 'true');
+            video.setAttribute('controlsList', 'nodownload noremoteplayback noplaybackrate');
 
-            // Lógica de Recuperação de Travamentos (Stuttering Handler)
             let stallCount = 0;
             const maxStallsBeforeReload = 3;
 
             video.addEventListener('stalled', () => {
-                console.log('Video stalled, attempting recovery...');
                 stallCount++;
-                
                 if (stallCount >= maxStallsBeforeReload) {
-                    console.log('Multiple stalls detected, forcing buffer reload');
                     const currentTime = video.currentTime;
-                    // Forçar reload do buffer saltando 0.1s para trás/frente
                     video.currentTime = Math.max(0, currentTime - 0.1);
                     video.play().catch(() => {});
-                    stallCount = 0; // Resetar contador
-                }
-            });
-
-            // Resetar contador de stalls se o vídeo estiver a correr bem
-            video.addEventListener('timeupdate', () => {
-                if (stallCount > 0) {
                     stallCount = 0;
                 }
             });
 
-            // Fallback para se o vídeo falhar (ex: codec não suportado ou erro de rede grave)
+            video.addEventListener('timeupdate', () => {
+                if (stallCount > 0) stallCount = 0;
+            });
+
             video.onerror = () => {
-                console.error("Erro ao carregar vídeo");
                 showError("Erro ao carregar vídeo. Verifique a internet.");
             };
 
             displayArea.appendChild(video);
-
-            // Esconder loader quando o vídeo estiver pronto para reproduzir
             video.addEventListener('canplay', hideLoader);
             video.addEventListener('loadeddata', hideLoader);
-
-            // Forçar o início do vídeo
             video.play().catch(error => {
-                console.log("Autoplay inicial bloqueado, tentando novamente em 500ms", error);
-                setTimeout(() => {
-                    video.play().catch(e => console.error("Autoplay falhou definitivamente", e));
-                }, 500);
+                setTimeout(() => video.play().catch(e => console.error("Autoplay falhou", e)), 500);
             });
         }
 
@@ -215,7 +185,6 @@
             };
 
             img.onload = hideLoader;
-
             displayArea.appendChild(img);
         }
 
@@ -229,22 +198,14 @@
             `;
             loader.style.opacity = '1';
             loader.style.display = 'flex';
-            
-            // Auto-recovery: tentar recarregar a página em 10s se houver erro crítico
-            setTimeout(() => {
-                window.location.reload();
-            }, 10000);
+            setTimeout(() => window.location.reload(), 10000);
         }
 
-        // Inicializar
         initDisplay();
 
-        // Re-renderizar se a orientação da TV mudar (ex: TV gira)
         window.addEventListener('resize', () => {
             const video = document.querySelector('video');
-            if (video && video.paused) {
-                video.play().catch(() => {});
-            }
+            if (video && video.paused) video.play().catch(() => {});
         });
     </script>
 </body>
