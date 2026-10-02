@@ -27,7 +27,6 @@
             justify-content: center;
             align-items: center;
             position: relative;
-            /* A cor será definida via JS na variável --bg-color */
             background-color: var(--bg-color, #000); 
         }
 
@@ -39,6 +38,7 @@
             pointer-events: none;
         }
 
+        /* Fallback para o caso de o MediaRecorder não funcionar (TVs antigas) */
         img.price-sheet {
             width: 100%;
             height: 100%;
@@ -104,8 +104,6 @@
 
         const params = new URLSearchParams(window.location.search);
         const mode = params.get('mode') || 'video';
-        
-        // Cor de fundo: padrão preto (000000). Pode ser alterado via ?bg=RRGGBB
         const bgColor = params.get('bg') || '000000'; 
 
         const displayArea = document.getElementById('displayArea');
@@ -123,7 +121,7 @@
             if (mode === 'video') {
                 renderVideo();
             } else if (mode === 'price') {
-                renderPrice();
+                renderPriceAsVideo();
             } else {
                 showError("Modo inválido. Use ?mode=video ou ?mode=price");
             }
@@ -173,19 +171,171 @@
             });
         }
 
-        function renderPrice() {
-            const img = document.createElement('img');
-            img.src = ASSETS.price;
-            img.alt = "Preçário MR. Pizza";
-            img.className = 'price-sheet';
-            img.crossOrigin = 'anonymous';
+        async function renderPriceAsVideo() {
+            try {
+                // 1. Carregar a Imagem
+                const img = await loadImage(ASSETS.price);
+                
+                // 2. Criar Canvas
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                
+                // Definir tamanho do canvas para 1080p (padrão para TVs)
+                // A imagem será escalada para caber neste canvas
+                canvas.width = 1920;
+                canvas.height = 1080;
 
-            img.onerror = () => {
+                // 3. Desenhar a Imagem no Canvas (object-fit: contain simulado)
+                drawImageContained(ctx, img, canvas.width, canvas.height);
+
+                // 4. Verificar se MediaRecorder está disponível
+                if (!window.MediaRecorder) {
+                    console.warn("MediaRecorder não suportado, a usar fallback estático");
+                    fallbackStaticImage(img);
+                    return;
+                }
+
+                // 5. Configurar o Stream de Vídeo
+                const stream = canvas.captureStream(30); // 30 FPS
+                
+                // Determinar o melhor codec disponível
+                let mimeType = 'video/webm;codecs=vp9';
+                if (!MediaRecorder.isTypeSupported(mimeType)) {
+                    mimeType = 'video/webm;codecs=vp8';
+                }
+                if (!MediaRecorder.isTypeSupported(mimeType)) {
+                    mimeType = 'video/webm';
+                }
+                if (!MediaRecorder.isTypeSupported(mimeType)) {
+                    mimeType = 'video/mp4'; // Fallback para Safari/iOS (raro em TVs)
+                }
+
+                const mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: mimeType,
+                    videoBitsPerSecond: 5000000 // 5 Mbps para qualidade alta
+                });
+
+                const chunks = [];
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) {
+                        chunks.push(e.data);
+                    }
+                };
+
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: mimeType });
+                    const url = URL.createObjectURL(blob);
+                    
+                    // Criar o elemento de vídeo
+                    const video = document.createElement('video');
+                    video.src = url;
+                    video.autoplay = true;
+                    video.loop = true;
+                    video.muted = true;
+                    video.playsInline = true;
+                    video.setAttribute('playsinline', '');
+                    video.setAttribute('controls', 'false');
+                    video.setAttribute('disableRemotePlayback', 'true');
+                    video.setAttribute('disablePictureInPicture', 'true');
+
+                    displayArea.appendChild(video);
+                    video.addEventListener('canplay', hideLoader);
+                    video.play().catch(e => console.error("Erro ao reproduzir vídeo gerado", e));
+                };
+
+                // 6. Iniciar Gravação
+                mediaRecorder.start(1000); // Recolher dados a cada 1 segundo
+
+                // 7. Loop de Animação (Para evitar Sleep Mode)
+                let frameCount = 0;
+                const fps = 30;
+                const durationMs = 10000; // 10 segundos por "loop"
+
+                function animate() {
+                    // Atualizar o canvas com uma variação mínima de brilho
+                    // Isto mantém o processador ativo sem ser visível
+                    const brightness = 1 + Math.sin(frameCount * 0.05) * 0.01; // Variação de 1%
+                    ctx.filter = `brightness(${brightness})`;
+                    drawImageContained(ctx, img, canvas.width, canvas.height);
+                    ctx.filter = 'none';
+
+                    frameCount++;
+                    
+                    // Parar a gravação após 10 segundos e reiniciar
+                    // Isso cria um loop perfeito e evita que o blob fique gigante
+                    if (frameCount >= fps * (durationMs / 1000)) {
+                        mediaRecorder.stop();
+                        mediaRecorder.start(1000); // Reiniciar gravação
+                        frameCount = 0;
+                    }
+
+                    requestAnimationFrame(animate);
+                }
+
+                animate();
+
+            } catch (error) {
+                console.error("Erro ao gerar vídeo da imagem", error);
+                fallbackStaticImage(null, error);
+            }
+        }
+
+        function fallbackStaticImage(img, error) {
+            // Fallback: Mostrar a imagem estática se algo falhar
+            const imgElement = document.createElement('img');
+            if (img) {
+                imgElement.src = img.src;
+            } else {
+                imgElement.src = ASSETS.price;
+            }
+            imgElement.alt = "Preçário MR. Pizza";
+            imgElement.className = 'price-sheet';
+            imgElement.crossOrigin = 'anonymous';
+
+            imgElement.onerror = () => {
                 showError("Erro ao carregar preçário.");
             };
 
-            img.onload = hideLoader;
-            displayArea.appendChild(img);
+            imgElement.onload = hideLoader;
+            displayArea.appendChild(imgElement);
+        }
+
+        function loadImage(url) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = url;
+            });
+        }
+
+        function drawImageContained(ctx, img, targetWidth, targetHeight) {
+            // Limpar o canvas com a cor de fundo
+            ctx.fillStyle = `#${document.documentElement.style.getPropertyValue('--bg-color').replace('#', '') || '000000'}`;
+            ctx.fillRect(0, 0, targetWidth, targetHeight);
+
+            // Calcular escala para "contain" (manter proporção)
+            const imgAspect = img.width / img.height;
+            const canvasAspect = targetWidth / targetHeight;
+            
+            let drawWidth, drawHeight;
+            
+            if (imgAspect > canvasAspect) {
+                // Imagem mais larga que o canvas
+                drawWidth = targetWidth;
+                drawHeight = targetWidth / imgAspect;
+            } else {
+                // Imagem mais alta que o canvas
+                drawHeight = targetHeight;
+                drawWidth = targetHeight * imgAspect;
+            }
+
+            // Centrar a imagem
+            const offsetX = (targetWidth - drawWidth) / 2;
+            const offsetY = (targetHeight - drawHeight) / 2;
+
+            ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
         }
 
         function showError(message) {
