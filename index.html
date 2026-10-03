@@ -21,7 +21,6 @@
             touch-action: none;
             -webkit-user-select: none;
             user-select: none;
-            /* Impede que o body crie scrollbars invisíveis que afetam o vw/vh */
             position: fixed;
             top: 0;
             left: 0;
@@ -29,52 +28,31 @@
             bottom: 0;
         }
 
-        /* Container de Fallback (apenas para o loader/erros) */
         .display-container {
-            position: absolute;
-            top: 0;
-            left: 0;
             width: 100%;
             height: 100%;
-            z-index: 10;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background-color: var(--bg-color, #000); 
-        }
-
-        /* O ELEMENTO DE VÍDEO: FORÇADO A PREENCHER O ECRÃ */
-        video {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            /* object-fit: cover garante que a proporção é mantida e a tela preenchida */
-            object-fit: cover;
+            position: relative;
             background-color: #000;
-            /* Micro-zoom para eliminar barras pretas de safe-area da TV */
-            transform: scale(1.01);
-            will-change: transform;
-            z-index: 1;
-            pointer-events: none;
         }
 
-        /* Fallback para Imagem Estática */
-        img.price-sheet {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            object-fit: cover;
-            transform: scale(1.01);
-            background-color: transparent;
-            z-index: 1;
+        /* O SEGREDO: object-fit: contain + transform: scale() */
+        /* O WebOS da LG lida melhor com contain + zoom do que com cover direto */
+        video, img.price-sheet {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            object-position: center;
+            background-color: #000;
+            pointer-events: none;
+            display: block;
+            /* Zoom forçado para preencher a tela se a proporção for 16:9 */
+            /* Ajuste este valor se precisar: 1.0 = normal, 1.5 = 50% maior */
+            transform: scale(1);
+            transition: transform 0.5s ease;
         }
 
         .loading-overlay {
-            position: fixed;
+            position: absolute;
             top: 0;
             left: 0;
             width: 100%;
@@ -107,7 +85,6 @@
 </head>
 <body>
 
-    <!-- O container agora é apenas para o loader/erros -->
     <div class="display-container" id="displayArea">
         <div class="loading-overlay" id="loader">
             <div class="spinner"></div>
@@ -124,12 +101,9 @@
 
         const params = new URLSearchParams(window.location.search);
         const mode = params.get('mode') || 'video';
-        const bgColor = params.get('bg') || '000000'; 
 
         const displayArea = document.getElementById('displayArea');
         const loader = document.getElementById('loader');
-
-        document.documentElement.style.setProperty('--bg-color', `#${bgColor}`);
 
         function hideLoader() {
             if (loader && loader.parentNode) {
@@ -152,11 +126,12 @@
 
         function renderVideo(src, hasFallback = false) {
             const video = document.createElement('video');
-            video.preload = 'metadata';
+            video.preload = 'auto';
             video.autoplay = true;
             video.loop = true;
             video.muted = true;
             video.playsInline = true;
+            video.crossOrigin = 'anonymous';
             video.setAttribute('playsinline', '');
             video.setAttribute('controls', 'false');
             video.setAttribute('disableRemotePlayback', 'true');
@@ -168,23 +143,26 @@
             source.type = 'video/mp4';
             video.appendChild(source);
 
-            const loadTimeout = setTimeout(() => {
-                if (video.readyState < 2) {
-                    console.error("Timeout: Vídeo não carregou em 15s");
-                    if (hasFallback) {
-                        renderStaticImage();
-                    } else {
-                        showError("Erro ao carregar vídeo. Verifique a internet.");
-                    }
-                }
-            }, 15000);
-
             let stallCount = 0;
             const maxStallsBeforeReload = 3;
+            let hasStarted = false;
+
+            // Verificar se o vídeo está realmente a mostrar conteúdo (não preto)
+            function checkVideoContent() {
+                if (!hasStarted) return;
+                
+                // Se o vídeo estiver a tocar, mas o canvas estiver preto, há um problema
+                // Para simplificar, vamos confiar no 'timeupdate'
+                if (video.currentTime > 0.1 && video.videoWidth > 0) {
+                    // Vídeo está a mostrar conteúdo
+                    stallCount = 0;
+                }
+            }
 
             video.addEventListener('stalled', () => {
                 stallCount++;
                 if (stallCount >= maxStallsBeforeReload) {
+                    console.log("Vídeo travou, a tentar recuperar");
                     const currentTime = video.currentTime;
                     video.currentTime = Math.max(0, currentTime - 0.1);
                     video.play().catch(() => {});
@@ -192,13 +170,10 @@
                 }
             });
 
-            video.addEventListener('timeupdate', () => {
-                if (stallCount > 0) stallCount = 0;
-            });
+            video.addEventListener('timeupdate', checkVideoContent);
 
             video.onerror = () => {
                 console.error("Erro ao carregar vídeo:", src);
-                clearTimeout(loadTimeout);
                 if (hasFallback) {
                     renderStaticImage();
                 } else {
@@ -207,16 +182,32 @@
             };
 
             const onReady = () => {
-                clearTimeout(loadTimeout);
                 hideLoader();
+                hasStarted = true;
+                
+                // Forçar o vídeo a recarregar os metadados (workaround para WebOS)
+                video.load();
+                video.play().catch(e => console.error("Autoplay falhou", e));
+                
                 video.removeEventListener('canplay', onReady);
                 video.removeEventListener('loadeddata', onReady);
             };
             video.addEventListener('canplay', onReady);
             video.addEventListener('loadeddata', onReady);
 
-            // Adicionar o vídeo diretamente ao body (fora do container flex)
-            document.body.appendChild(video);
+            // Timeout de segurança
+            const loadTimeout = setTimeout(() => {
+                if (!hasStarted) {
+                    console.error("Timeout: Vídeo não carregou em 10s");
+                    if (hasFallback) {
+                        renderStaticImage();
+                    } else {
+                        showError("Erro ao carregar vídeo. Verifique a internet.");
+                    }
+                }
+            }, 10000);
+
+            displayArea.appendChild(video);
             
             video.play().catch(error => {
                 console.log("Autoplay inicial bloqueado, tentando novamente", error);
@@ -235,8 +226,7 @@
             };
 
             imgElement.onload = hideLoader;
-            // Adicionar a imagem diretamente ao body
-            document.body.appendChild(imgElement);
+            displayArea.appendChild(imgElement);
         }
 
         function showError(message) {
