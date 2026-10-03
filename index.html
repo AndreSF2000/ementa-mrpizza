@@ -28,7 +28,7 @@
             bottom: 0;
         }
 
-        /* O SEGREDO: Vídeo com min-width/min-height 100vw/100vh */
+        /* O SEGREDO: Vídeo com min-width/min-height 100vw/100vh e otimização de nitidez */
         #bg-video {
             position: fixed;
             top: 0;
@@ -41,6 +41,9 @@
             background-color: #000;
             z-index: -1;
             pointer-events: none;
+            image-rendering: -webkit-optimize-contrast;
+            transform: translateZ(0);
+            backface-visibility: hidden;
         }
 
         /* Imagem Fallback com Animação de Segurança */
@@ -57,7 +60,6 @@
             z-index: -1;
             pointer-events: none;
             display: none;
-            /* Animação de segurança: variação de brilho de 1% */
             animation: subtleBlink 2s ease-in-out infinite;
         }
 
