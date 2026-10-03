@@ -34,12 +34,11 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            background-color: #000;
+            background-color: transparent;
             pointer-events: none;
             display: block;
         }
 
-        /* Fallback para imagem estática */
         img.price-sheet {
             width: 100%;
             height: 100%;
@@ -54,14 +53,14 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.9);
+            background: #000; /* Fundo sólido preto para o loader */
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             z-index: 100;
             color: white;
-            transition: opacity 0.5s ease-out;
+            transition: opacity 0.3s ease-out;
         }
 
         .spinner {
@@ -118,7 +117,7 @@
                 loader.style.opacity = '0';
                 setTimeout(() => {
                     if (loader.parentNode) loader.remove();
-                }, 500);
+                }, 300);
             }
         }
 
@@ -170,7 +169,6 @@
 
             displayArea.appendChild(video);
             
-            // Esconder loader assim que houver dados suficientes para reproduzir
             video.addEventListener('loadeddata', hideLoader);
             video.addEventListener('canplay', hideLoader);
             
@@ -189,126 +187,20 @@
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d', { willReadFrequently: true });
                 
-                // Definir tamanho do canvas para 1080p
                 canvas.width = 1920;
                 canvas.height = 1080;
 
-                // 3. Desenhar a Imagem no Canvas (object-fit: contain simulado)
+                // 3. Desenhar a Imagem no Canvas
                 drawImageContained(ctx, img, canvas.width, canvas.height);
 
-                // Adicionar o Canvas ao DOM imediatamente
+                // 4. Adicionar o Canvas ao DOM
                 displayArea.appendChild(canvas);
-                
-                // 4. Verificar se MediaRecorder está disponível
-                if (!window.MediaRecorder) {
-                    console.warn("MediaRecorder não suportado, a usar Canvas estático com blink");
-                    startCanvasBlink(canvas, ctx, img);
-                    hideLoader();
-                    return;
-                }
 
-                // 5. Configurar o Stream de Vídeo
-                const stream = canvas.captureStream(30); // 30 FPS
-                
-                // Determinar o melhor codec disponível
-                let mimeType = 'video/webm;codecs=vp9';
-                if (!MediaRecorder.isTypeSupported(mimeType)) {
-                    mimeType = 'video/webm;codecs=vp8';
-                }
-                if (!MediaRecorder.isTypeSupported(mimeType)) {
-                    mimeType = 'video/webm';
-                }
-                if (!MediaRecorder.isTypeSupported(mimeType)) {
-                    // Fallback para Canvas Blink se não houver codec de vídeo
-                    console.warn("Nenhum codec de vídeo suportado, a usar Canvas estático com blink");
-                    startCanvasBlink(canvas, ctx, img);
-                    hideLoader();
-                    return;
-                }
+                // 5. Iniciar o Blink Subtil (Anti-Sleep)
+                startCanvasBlink(canvas, ctx, img);
 
-                const mediaRecorder = new MediaRecorder(stream, {
-                    mimeType: mimeType,
-                    videoBitsPerSecond: 5000000 // 5 Mbps
-                });
-
-                const chunks = [];
-                mediaRecorder.ondataavailable = (e) => {
-                    if (e.data.size > 0) {
-                        chunks.push(e.data);
-                    }
-                };
-
-                let isRecording = true;
-                let hasPlayedOnce = false;
-
-                mediaRecorder.onstop = () => {
-                    if (!isRecording) return;
-                    
-                    const blob = new Blob(chunks, { type: mimeType });
-                    const url = URL.createObjectURL(blob);
-                    
-                    // Remover o Canvas e substituir pelo Vídeo
-                    const parent = canvas.parentNode;
-                    if (parent) parent.removeChild(canvas);
-
-                    const video = document.createElement('video');
-                    video.src = url;
-                    video.autoplay = true;
-                    video.loop = true;
-                    video.muted = true;
-                    video.playsInline = true;
-                    video.setAttribute('playsinline', '');
-                    video.setAttribute('controls', 'false');
-                    video.setAttribute('disableRemotePlayback', 'true');
-                    video.setAttribute('disablePictureInPicture', 'true');
-
-                    displayArea.appendChild(video);
-                    
-                    // Esconder loader apenas quando o vídeo estiver a tocar
-                    const onCanPlay = () => {
-                        hideLoader();
-                        video.removeEventListener('canplay', onCanPlay);
-                    };
-                    video.addEventListener('canplay', onCanPlay);
-                    
-                    video.play().catch(e => {
-                        console.error("Erro ao reproduzir vídeo gerado", e);
-                        // Fallback para Canvas Blink se o vídeo falhar
-                        startCanvasBlink(canvas, ctx, img);
-                        hideLoader();
-                    });
-                };
-
-                // Iniciar Gravação
-                mediaRecorder.start(1000); // Recolher dados a cada 1 segundo
-
-                // Loop de Animação (Para evitar Sleep Mode)
-                let frameCount = 0;
-                const fps = 30;
-                const durationMs = 10000; // 10 segundos por "loop"
-
-                function animate() {
-                    if (!isRecording) return;
-
-                    // Atualizar o canvas com uma variação mínima de brilho
-                    const brightness = 1 + Math.sin(frameCount * 0.05) * 0.01; // Variação de 1%
-                    ctx.filter = `brightness(${brightness})`;
-                    drawImageContained(ctx, img, canvas.width, canvas.height);
-                    ctx.filter = 'none';
-
-                    frameCount++;
-                    
-                    // Parar a gravação após 10 segundos e reiniciar
-                    if (frameCount >= fps * (durationMs / 1000)) {
-                        mediaRecorder.stop();
-                        mediaRecorder.start(1000); // Reiniciar gravação
-                        frameCount = 0;
-                    }
-
-                    requestAnimationFrame(animate);
-                }
-
-                animate();
+                // 6. Esconder o Loader
+                hideLoader();
 
             } catch (error) {
                 console.error("Erro ao gerar vídeo da imagem", error);
@@ -317,9 +209,9 @@
         }
 
         function startCanvasBlink(canvas, ctx, img) {
-            // Usado quando MediaRecorder não está disponível
             let frameCount = 0;
             function blinkLoop() {
+                // Variação de brilho de 1% para manter a TV ativa
                 const brightness = 1 + Math.sin(frameCount * 0.05) * 0.01;
                 ctx.filter = `brightness(${brightness})`;
                 drawImageContained(ctx, img, canvas.width, canvas.height);
@@ -361,7 +253,6 @@
             ctx.fillStyle = `#${bgHex}`;
             ctx.fillRect(0, 0, targetWidth, targetHeight);
 
-            // Calcular escala para "contain" (manter proporção)
             const imgAspect = img.width / img.height;
             const canvasAspect = targetWidth / targetHeight;
             
