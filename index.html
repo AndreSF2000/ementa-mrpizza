@@ -29,7 +29,6 @@
         }
 
         /* O SEGREDO: Vídeo com min-width/min-height 100vw/100vh */
-        /* Isto força o WebOS da LG a ocupar o ecrã físico */
         #bg-video {
             position: fixed;
             top: 0;
@@ -44,7 +43,7 @@
             pointer-events: none;
         }
 
-        /* Imagem Fallback (se o vídeo falhar) */
+        /* Imagem Fallback com Animação de Segurança */
         #fallback-img {
             position: fixed;
             top: 0;
@@ -57,7 +56,14 @@
             background-color: #000;
             z-index: -1;
             pointer-events: none;
-            display: none; /* Oculto por padrão */
+            display: none;
+            /* Animação de segurança: variação de brilho de 1% */
+            animation: subtleBlink 2s ease-in-out infinite;
+        }
+
+        @keyframes subtleBlink {
+            0%, 100% { filter: brightness(1); }
+            50% { filter: brightness(1.01); }
         }
 
         /* Loader */
@@ -101,7 +107,7 @@
         O seu navegador não suporta vídeos.
     </video>
 
-    <!-- IMAGEM FALLBACK -->
+    <!-- IMAGEM FALLBACK COM ANIMAÇÃO -->
     <img id="fallback-img" src="" alt="Preçário MR. Pizza">
 
     <!-- LOADER -->
@@ -152,15 +158,11 @@
         }
 
         function loadVideo(src, hasFallback = false) {
-            // Definir o src do source
             videoSource.src = src;
-            
-            // Forçar reload
             video.load();
             
             let hasStarted = false;
             
-            // Timeout de segurança: 8 segundos
             const loadTimeout = setTimeout(() => {
                 if (!hasStarted) {
                     console.error("Timeout: Vídeo não carregou em 8s");
@@ -172,7 +174,6 @@
                 }
             }, 8000);
 
-            // Verificar readyState a cada 500ms (workaround para WebOS)
             const checkInterval = setInterval(() => {
                 if (video.readyState >= 2) {
                     clearInterval(checkInterval);
@@ -211,7 +212,6 @@
                 }
             });
 
-            // Tentar autoplay
             video.play().catch(error => {
                 console.log("Autoplay inicial bloqueado, tentando novamente", error);
                 setTimeout(() => video.play().catch(e => console.error("Autoplay falhou", e)), 500);
