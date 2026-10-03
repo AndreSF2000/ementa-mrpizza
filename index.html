@@ -99,13 +99,8 @@
         // CONFIGURAÇÃO DE ASSETS
         // =========================================================================
         const ASSETS = {
-            // Vídeo dos Menus
             video: "https://raw.githubusercontent.com/AndreSF2000/ementa-mrpizza/main/menus-mr-ermesinde-out-2026.mp4",
-            
-            // Vídeo do Preçário (Link exato com espaço codificado %20)
             priceVideo: "https://raw.githubusercontent.com/AndreSF2000/ementa-mrpizza/refs/heads/main/precario%20video.mp4",
-            
-            // Imagem de Fallback (Se o vídeo do preçário falhar)
             price: "https://raw.githubusercontent.com/AndreSF2000/ementa-mrpizza/main/menu-tv-fixo.png"
         };
 
@@ -131,32 +126,46 @@
             if (mode === 'video') {
                 renderVideo(ASSETS.video);
             } else if (mode === 'price') {
-                // Tenta carregar o vídeo do preçário
                 renderVideo(ASSETS.priceVideo, true);
             } else {
                 showError("Modo inválido. Use ?mode=video ou ?mode=price");
             }
         }
 
-        /**
-         * Função genérica para renderizar vídeo.
-         * @param {string} src - URL do vídeo
-         * @param {boolean} hasFallback - Se true, e o vídeo falhar, mostra a imagem estática
-         */
         function renderVideo(src, hasFallback = false) {
             const video = document.createElement('video');
-            video.src = src;
+            
+            // Otimizações para WebOS/LG
+            video.preload = 'metadata'; // Baixa apenas metadados primeiro
             video.autoplay = true;
             video.loop = true;
             video.muted = true;
             video.playsInline = true;
-            video.preload = 'auto';
-            video.crossOrigin = 'anonymous';
             video.setAttribute('playsinline', '');
             video.setAttribute('controls', 'false');
             video.setAttribute('disableRemotePlayback', 'true');
             video.setAttribute('disablePictureInPicture', 'true');
             video.setAttribute('controlsList', 'nodownload noremoteplayback noplaybackrate');
+            
+            // REMOVI crossOrigin='anonymous' para evitar travamentos de CORS no WebOS
+            
+            // Usar <source> para melhor compatibilidade
+            const source = document.createElement('source');
+            source.src = src;
+            source.type = 'video/mp4';
+            video.appendChild(source);
+
+            // Timeout de Erro: Se não carregar em 15s, assume erro
+            const loadTimeout = setTimeout(() => {
+                if (video.readyState < 2) {
+                    console.error("Timeout: Vídeo não carregou em 15s");
+                    if (hasFallback) {
+                        renderStaticImage();
+                    } else {
+                        showError("Erro ao carregar vídeo. Verifique a internet.");
+                    }
+                }
+            }, 15000);
 
             let stallCount = 0;
             const maxStallsBeforeReload = 3;
@@ -177,18 +186,25 @@
 
             video.onerror = () => {
                 console.error("Erro ao carregar vídeo:", src);
+                clearTimeout(loadTimeout);
                 if (hasFallback) {
-                    console.log("A usar fallback de imagem estática...");
                     renderStaticImage();
                 } else {
                     showError("Erro ao carregar vídeo. Verifique a internet.");
                 }
             };
 
+            // Esconder loader assim que houver dados suficientes
+            const onReady = () => {
+                clearTimeout(loadTimeout);
+                hideLoader();
+                video.removeEventListener('canplay', onReady);
+                video.removeEventListener('loadeddata', onReady);
+            };
+            video.addEventListener('canplay', onReady);
+            video.addEventListener('loadeddata', onReady);
+
             displayArea.appendChild(video);
-            
-            video.addEventListener('loadeddata', hideLoader);
-            video.addEventListener('canplay', hideLoader);
             
             video.play().catch(error => {
                 console.log("Autoplay inicial bloqueado, tentando novamente", error);
@@ -201,7 +217,6 @@
             imgElement.src = ASSETS.price;
             imgElement.alt = "Preçário MR. Pizza";
             imgElement.className = 'price-sheet';
-            imgElement.crossOrigin = 'anonymous';
 
             imgElement.onerror = () => {
                 showError("Erro ao carregar preçário.");
