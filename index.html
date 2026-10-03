@@ -28,7 +28,7 @@
             bottom: 0;
         }
 
-        /* O SEGREDO: Vídeo com min-width/min-height 100vw/100vh e otimização de nitidez */
+        /* O SEGREDO: Vídeo com otimização de nitidez e contraste */
         #bg-video {
             position: fixed;
             top: 0;
@@ -41,12 +41,17 @@
             background-color: #000;
             z-index: -1;
             pointer-events: none;
+            /* Otimização de Nitidez */
             image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+            /* Aumento de Contraste e Saturação para texto mais nítido */
+            filter: contrast(1.05) saturate(1.1);
+            /* Aceleração de Hardware */
             transform: translateZ(0);
             backface-visibility: hidden;
         }
 
-        /* Imagem Fallback com Animação de Segurança */
+        /* Imagem Fallback com Animação de Segurança e Nitidez */
         #fallback-img {
             position: fixed;
             top: 0;
@@ -60,12 +65,15 @@
             z-index: -1;
             pointer-events: none;
             display: none;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+            filter: contrast(1.05) saturate(1.1);
             animation: subtleBlink 2s ease-in-out infinite;
         }
 
         @keyframes subtleBlink {
-            0%, 100% { filter: brightness(1); }
-            50% { filter: brightness(1.01); }
+            0%, 100% { filter: contrast(1.05) saturate(1.1) brightness(1); }
+            50% { filter: contrast(1.05) saturate(1.1) brightness(1.01); }
         }
 
         /* Loader */
