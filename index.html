@@ -21,36 +21,56 @@
             touch-action: none;
             -webkit-user-select: none;
             user-select: none;
+            /* Impede que o body crie scrollbars invisíveis que afetam o vw/vh */
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
         }
 
+        /* Container de Fallback (apenas para o loader/erros) */
         .display-container {
-            position: fixed;
+            position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
+            z-index: 10;
             display: flex;
             justify-content: center;
             align-items: center;
             background-color: var(--bg-color, #000); 
-            z-index: 1;
         }
 
+        /* O ELEMENTO DE VÍDEO: FORÇADO A PREENCHER O ECRÃ */
         video {
-            width: 100%;
-            height: 100%;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            /* object-fit: cover garante que a proporção é mantida e a tela preenchida */
             object-fit: cover;
             background-color: #000;
+            /* Micro-zoom para eliminar barras pretas de safe-area da TV */
+            transform: scale(1.01);
+            will-change: transform;
+            z-index: 1;
             pointer-events: none;
-            display: block;
         }
 
+        /* Fallback para Imagem Estática */
         img.price-sheet {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            object-position: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            transform: scale(1.01);
             background-color: transparent;
+            z-index: 1;
         }
 
         .loading-overlay {
@@ -87,6 +107,7 @@
 </head>
 <body>
 
+    <!-- O container agora é apenas para o loader/erros -->
     <div class="display-container" id="displayArea">
         <div class="loading-overlay" id="loader">
             <div class="spinner"></div>
@@ -95,9 +116,6 @@
     </div>
 
     <script>
-        // =========================================================================
-        // CONFIGURAÇÃO DE ASSETS
-        // =========================================================================
         const ASSETS = {
             video: "https://raw.githubusercontent.com/AndreSF2000/ementa-mrpizza/main/menus-mr-ermesinde-out-2026.mp4",
             priceVideo: "https://raw.githubusercontent.com/AndreSF2000/ementa-mrpizza/refs/heads/main/precario%20video.mp4",
@@ -134,9 +152,7 @@
 
         function renderVideo(src, hasFallback = false) {
             const video = document.createElement('video');
-            
-            // Otimizações para WebOS/LG
-            video.preload = 'metadata'; // Baixa apenas metadados primeiro
+            video.preload = 'metadata';
             video.autoplay = true;
             video.loop = true;
             video.muted = true;
@@ -146,16 +162,12 @@
             video.setAttribute('disableRemotePlayback', 'true');
             video.setAttribute('disablePictureInPicture', 'true');
             video.setAttribute('controlsList', 'nodownload noremoteplayback noplaybackrate');
-            
-            // REMOVI crossOrigin='anonymous' para evitar travamentos de CORS no WebOS
-            
-            // Usar <source> para melhor compatibilidade
+
             const source = document.createElement('source');
             source.src = src;
             source.type = 'video/mp4';
             video.appendChild(source);
 
-            // Timeout de Erro: Se não carregar em 15s, assume erro
             const loadTimeout = setTimeout(() => {
                 if (video.readyState < 2) {
                     console.error("Timeout: Vídeo não carregou em 15s");
@@ -194,7 +206,6 @@
                 }
             };
 
-            // Esconder loader assim que houver dados suficientes
             const onReady = () => {
                 clearTimeout(loadTimeout);
                 hideLoader();
@@ -204,7 +215,8 @@
             video.addEventListener('canplay', onReady);
             video.addEventListener('loadeddata', onReady);
 
-            displayArea.appendChild(video);
+            // Adicionar o vídeo diretamente ao body (fora do container flex)
+            document.body.appendChild(video);
             
             video.play().catch(error => {
                 console.log("Autoplay inicial bloqueado, tentando novamente", error);
@@ -223,7 +235,8 @@
             };
 
             imgElement.onload = hideLoader;
-            displayArea.appendChild(imgElement);
+            // Adicionar a imagem diretamente ao body
+            document.body.appendChild(imgElement);
         }
 
         function showError(message) {
