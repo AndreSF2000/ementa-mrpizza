@@ -28,35 +28,39 @@
             bottom: 0;
         }
 
-        /* Vídeo: 100vw/100vh diretos, sem container */
-        video {
+        /* O SEGREDO: Vídeo com min-width/min-height 100vw/100vh */
+        /* Isto força o WebOS da LG a ocupar o ecrã físico */
+        #bg-video {
             position: fixed;
             top: 0;
             left: 0;
+            min-width: 100vw;
+            min-height: 100vh;
             width: 100vw;
             height: 100vh;
             object-fit: cover;
             background-color: #000;
+            z-index: -1;
             pointer-events: none;
-            display: block;
-            z-index: 1;
         }
 
-        /* Imagem Fallback */
-        img.price-sheet {
+        /* Imagem Fallback (se o vídeo falhar) */
+        #fallback-img {
             position: fixed;
             top: 0;
             left: 0;
+            min-width: 100vw;
+            min-height: 100vh;
             width: 100vw;
             height: 100vh;
             object-fit: cover;
             background-color: #000;
+            z-index: -1;
             pointer-events: none;
-            display: block;
-            z-index: 1;
+            display: none; /* Oculto por padrão */
         }
 
-        /* Loader: z-index alto para cobrir tudo */
+        /* Loader */
         .loading-overlay {
             position: fixed;
             top: 0;
@@ -91,6 +95,16 @@
 </head>
 <body>
 
+    <!-- VÍDEO ESTÁTICO NO DOM -->
+    <video id="bg-video" autoplay muted loop playsinline>
+        <source id="video-source" src="" type="video/mp4">
+        O seu navegador não suporta vídeos.
+    </video>
+
+    <!-- IMAGEM FALLBACK -->
+    <img id="fallback-img" src="" alt="Preçário MR. Pizza">
+
+    <!-- LOADER -->
     <div class="loading-overlay" id="loader">
         <div class="spinner"></div>
         <p>A carregar conteúdo...</p>
@@ -105,6 +119,10 @@
 
         const params = new URLSearchParams(window.location.search);
         const mode = params.get('mode') || 'video';
+
+        const video = document.getElementById('bg-video');
+        const videoSource = document.getElementById('video-source');
+        const fallbackImg = document.getElementById('fallback-img');
         const loader = document.getElementById('loader');
 
         function hideLoader() {
@@ -116,44 +134,38 @@
             }
         }
 
+        function showFallback() {
+            video.style.display = 'none';
+            fallbackImg.src = ASSETS.price;
+            fallbackImg.style.display = 'block';
+            hideLoader();
+        }
+
         function initDisplay() {
             if (mode === 'video') {
-                renderVideo(ASSETS.video);
+                loadVideo(ASSETS.video);
             } else if (mode === 'price') {
-                renderVideo(ASSETS.priceVideo, true);
+                loadVideo(ASSETS.priceVideo, true);
             } else {
                 showError("Modo inválido. Use ?mode=video ou ?mode=price");
             }
         }
 
-        function renderVideo(src, hasFallback = false) {
-            const video = document.createElement('video');
-            video.preload = 'auto';
-            video.autoplay = true;
-            video.loop = true;
-            video.muted = true;
-            video.playsInline = true;
-            video.crossOrigin = 'anonymous';
-            video.setAttribute('playsinline', '');
-            video.setAttribute('controls', 'false');
-            video.setAttribute('disableRemotePlayback', 'true');
-            video.setAttribute('disablePictureInPicture', 'true');
-            video.setAttribute('controlsList', 'nodownload noremoteplayback noplaybackrate');
-
-            const source = document.createElement('source');
-            source.src = src;
-            source.type = 'video/mp4';
-            video.appendChild(source);
-
+        function loadVideo(src, hasFallback = false) {
+            // Definir o src do source
+            videoSource.src = src;
+            
+            // Forçar reload
+            video.load();
+            
             let hasStarted = false;
-            let checkInterval = null;
-
+            
             // Timeout de segurança: 8 segundos
             const loadTimeout = setTimeout(() => {
                 if (!hasStarted) {
                     console.error("Timeout: Vídeo não carregou em 8s");
                     if (hasFallback) {
-                        renderStaticImage();
+                        showFallback();
                     } else {
                         showError("Erro ao carregar vídeo. Verifique a internet.");
                     }
@@ -161,9 +173,8 @@
             }, 8000);
 
             // Verificar readyState a cada 500ms (workaround para WebOS)
-            checkInterval = setInterval(() => {
+            const checkInterval = setInterval(() => {
                 if (video.readyState >= 2) {
-                    // Vídeo está pronto
                     clearInterval(checkInterval);
                     if (!hasStarted) {
                         hasStarted = true;
@@ -189,42 +200,22 @@
                 }
             });
 
-            video.onerror = () => {
+            video.addEventListener('error', () => {
                 console.error("Erro ao carregar vídeo:", src);
                 clearInterval(checkInterval);
                 clearTimeout(loadTimeout);
                 if (hasFallback) {
-                    renderStaticImage();
+                    showFallback();
                 } else {
                     showError("Erro ao carregar vídeo. Verifique a internet.");
                 }
-            };
+            });
 
-            // Adicionar o vídeo ao body
-            document.body.appendChild(video);
-            
-            // Forçar load
-            video.load();
-            
             // Tentar autoplay
             video.play().catch(error => {
                 console.log("Autoplay inicial bloqueado, tentando novamente", error);
                 setTimeout(() => video.play().catch(e => console.error("Autoplay falhou", e)), 500);
             });
-        }
-
-        function renderStaticImage() {
-            const imgElement = document.createElement('img');
-            imgElement.src = ASSETS.price;
-            imgElement.alt = "Preçário MR. Pizza";
-            imgElement.className = 'price-sheet';
-
-            imgElement.onerror = () => {
-                showError("Erro ao carregar preçário.");
-            };
-
-            imgElement.onload = hideLoader;
-            document.body.appendChild(imgElement);
         }
 
         function showError(message) {
@@ -243,7 +234,6 @@
         initDisplay();
 
         window.addEventListener('resize', () => {
-            const video = document.querySelector('video');
             if (video && video.paused) video.play().catch(() => {});
         });
     </script>
