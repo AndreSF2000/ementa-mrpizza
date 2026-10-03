@@ -30,15 +30,16 @@
             background-color: var(--bg-color, #000); 
         }
 
-        video {
+        video, canvas {
             width: 100%;
             height: 100%;
             object-fit: cover;
             background-color: #000;
             pointer-events: none;
+            display: block;
         }
 
-        /* Fallback para o caso de o MediaRecorder não funcionar (TVs antigas) */
+        /* Fallback para imagem estática */
         img.price-sheet {
             width: 100%;
             height: 100%;
@@ -113,8 +114,12 @@
         document.documentElement.style.setProperty('--bg-color', `#${bgColor}`);
 
         function hideLoader() {
-            loader.style.opacity = '0';
-            setTimeout(() => loader.remove(), 500);
+            if (loader && loader.parentNode) {
+                loader.style.opacity = '0';
+                setTimeout(() => {
+                    if (loader.parentNode) loader.remove();
+                }, 500);
+            }
         }
 
         function initDisplay() {
@@ -164,9 +169,13 @@
             };
 
             displayArea.appendChild(video);
-            video.addEventListener('canplay', hideLoader);
+            
+            // Esconder loader assim que houver dados suficientes para reproduzir
             video.addEventListener('loadeddata', hideLoader);
+            video.addEventListener('canplay', hideLoader);
+            
             video.play().catch(error => {
+                console.log("Autoplay inicial bloqueado, tentando novamente", error);
                 setTimeout(() => video.play().catch(e => console.error("Autoplay falhou", e)), 500);
             });
         }
@@ -180,18 +189,21 @@
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d', { willReadFrequently: true });
                 
-                // Definir tamanho do canvas para 1080p (padrão para TVs)
-                // A imagem será escalada para caber neste canvas
+                // Definir tamanho do canvas para 1080p
                 canvas.width = 1920;
                 canvas.height = 1080;
 
                 // 3. Desenhar a Imagem no Canvas (object-fit: contain simulado)
                 drawImageContained(ctx, img, canvas.width, canvas.height);
 
+                // Adicionar o Canvas ao DOM imediatamente
+                displayArea.appendChild(canvas);
+                
                 // 4. Verificar se MediaRecorder está disponível
                 if (!window.MediaRecorder) {
-                    console.warn("MediaRecorder não suportado, a usar fallback estático");
-                    fallbackStaticImage(img);
+                    console.warn("MediaRecorder não suportado, a usar Canvas estático com blink");
+                    startCanvasBlink(canvas, ctx, img);
+                    hideLoader();
                     return;
                 }
 
@@ -207,12 +219,16 @@
                     mimeType = 'video/webm';
                 }
                 if (!MediaRecorder.isTypeSupported(mimeType)) {
-                    mimeType = 'video/mp4'; // Fallback para Safari/iOS (raro em TVs)
+                    // Fallback para Canvas Blink se não houver codec de vídeo
+                    console.warn("Nenhum codec de vídeo suportado, a usar Canvas estático com blink");
+                    startCanvasBlink(canvas, ctx, img);
+                    hideLoader();
+                    return;
                 }
 
                 const mediaRecorder = new MediaRecorder(stream, {
                     mimeType: mimeType,
-                    videoBitsPerSecond: 5000000 // 5 Mbps para qualidade alta
+                    videoBitsPerSecond: 5000000 // 5 Mbps
                 });
 
                 const chunks = [];
@@ -222,11 +238,19 @@
                     }
                 };
 
+                let isRecording = true;
+                let hasPlayedOnce = false;
+
                 mediaRecorder.onstop = () => {
+                    if (!isRecording) return;
+                    
                     const blob = new Blob(chunks, { type: mimeType });
                     const url = URL.createObjectURL(blob);
                     
-                    // Criar o elemento de vídeo
+                    // Remover o Canvas e substituir pelo Vídeo
+                    const parent = canvas.parentNode;
+                    if (parent) parent.removeChild(canvas);
+
                     const video = document.createElement('video');
                     video.src = url;
                     video.autoplay = true;
@@ -239,21 +263,34 @@
                     video.setAttribute('disablePictureInPicture', 'true');
 
                     displayArea.appendChild(video);
-                    video.addEventListener('canplay', hideLoader);
-                    video.play().catch(e => console.error("Erro ao reproduzir vídeo gerado", e));
+                    
+                    // Esconder loader apenas quando o vídeo estiver a tocar
+                    const onCanPlay = () => {
+                        hideLoader();
+                        video.removeEventListener('canplay', onCanPlay);
+                    };
+                    video.addEventListener('canplay', onCanPlay);
+                    
+                    video.play().catch(e => {
+                        console.error("Erro ao reproduzir vídeo gerado", e);
+                        // Fallback para Canvas Blink se o vídeo falhar
+                        startCanvasBlink(canvas, ctx, img);
+                        hideLoader();
+                    });
                 };
 
-                // 6. Iniciar Gravação
+                // Iniciar Gravação
                 mediaRecorder.start(1000); // Recolher dados a cada 1 segundo
 
-                // 7. Loop de Animação (Para evitar Sleep Mode)
+                // Loop de Animação (Para evitar Sleep Mode)
                 let frameCount = 0;
                 const fps = 30;
                 const durationMs = 10000; // 10 segundos por "loop"
 
                 function animate() {
+                    if (!isRecording) return;
+
                     // Atualizar o canvas com uma variação mínima de brilho
-                    // Isto mantém o processador ativo sem ser visível
                     const brightness = 1 + Math.sin(frameCount * 0.05) * 0.01; // Variação de 1%
                     ctx.filter = `brightness(${brightness})`;
                     drawImageContained(ctx, img, canvas.width, canvas.height);
@@ -262,7 +299,6 @@
                     frameCount++;
                     
                     // Parar a gravação após 10 segundos e reiniciar
-                    // Isso cria um loop perfeito e evita que o blob fique gigante
                     if (frameCount >= fps * (durationMs / 1000)) {
                         mediaRecorder.stop();
                         mediaRecorder.start(1000); // Reiniciar gravação
@@ -276,18 +312,27 @@
 
             } catch (error) {
                 console.error("Erro ao gerar vídeo da imagem", error);
-                fallbackStaticImage(null, error);
+                fallbackStaticImage();
             }
         }
 
-        function fallbackStaticImage(img, error) {
-            // Fallback: Mostrar a imagem estática se algo falhar
-            const imgElement = document.createElement('img');
-            if (img) {
-                imgElement.src = img.src;
-            } else {
-                imgElement.src = ASSETS.price;
+        function startCanvasBlink(canvas, ctx, img) {
+            // Usado quando MediaRecorder não está disponível
+            let frameCount = 0;
+            function blinkLoop() {
+                const brightness = 1 + Math.sin(frameCount * 0.05) * 0.01;
+                ctx.filter = `brightness(${brightness})`;
+                drawImageContained(ctx, img, canvas.width, canvas.height);
+                ctx.filter = 'none';
+                frameCount++;
+                requestAnimationFrame(blinkLoop);
             }
+            blinkLoop();
+        }
+
+        function fallbackStaticImage() {
+            const imgElement = document.createElement('img');
+            imgElement.src = ASSETS.price;
             imgElement.alt = "Preçário MR. Pizza";
             imgElement.className = 'price-sheet';
             imgElement.crossOrigin = 'anonymous';
@@ -312,7 +357,8 @@
 
         function drawImageContained(ctx, img, targetWidth, targetHeight) {
             // Limpar o canvas com a cor de fundo
-            ctx.fillStyle = `#${document.documentElement.style.getPropertyValue('--bg-color').replace('#', '') || '000000'}`;
+            const bgHex = document.documentElement.style.getPropertyValue('--bg-color').replace('#', '').trim() || '000000';
+            ctx.fillStyle = `#${bgHex}`;
             ctx.fillRect(0, 0, targetWidth, targetHeight);
 
             // Calcular escala para "contain" (manter proporção)
@@ -322,16 +368,13 @@
             let drawWidth, drawHeight;
             
             if (imgAspect > canvasAspect) {
-                // Imagem mais larga que o canvas
                 drawWidth = targetWidth;
                 drawHeight = targetWidth / imgAspect;
             } else {
-                // Imagem mais alta que o canvas
                 drawHeight = targetHeight;
                 drawWidth = targetHeight * imgAspect;
             }
 
-            // Centrar a imagem
             const offsetX = (targetWidth - drawWidth) / 2;
             const offsetY = (targetHeight - drawHeight) / 2;
 
