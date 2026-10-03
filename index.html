@@ -2,9 +2,10 @@
 <html lang="pt-PT">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>MR. Pizza - TV Display</title>
     <style>
+        /* Reset Agresivo para TVs */
         * {
             margin: 0;
             padding: 0;
@@ -15,19 +16,27 @@
             width: 100%;
             height: 100%;
             background-color: #000;
-            overflow: hidden;
+            overflow: hidden; /* Evita scrollbars */
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             cursor: none;
+            /* Impede gestos de zoom/pinch na TV */
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
+        /* Container Fixo: Garante que ocupa exatamente o ecrã */
         .display-container {
-            width: 100vw;
-            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             display: flex;
             justify-content: center;
             align-items: center;
-            position: relative;
             background-color: var(--bg-color, #000); 
+            z-index: 1;
         }
 
         video, canvas {
@@ -48,12 +57,12 @@
         }
 
         .loading-overlay {
-            position: absolute;
+            position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: #000; /* Fundo sólido preto para o loader */
+            background: #000;
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -180,10 +189,10 @@
 
         async function renderPriceAsVideo() {
             try {
-                // 1. Carregar a Imagem
+                // 1. Carregar a Imagem AGORA
                 const img = await loadImage(ASSETS.price);
                 
-                // 2. Criar Canvas
+                // 2. Criar Canvas APENAS DEPOIS da imagem estar carregada
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d', { willReadFrequently: true });
                 
@@ -211,7 +220,6 @@
         function startCanvasBlink(canvas, ctx, img) {
             let frameCount = 0;
             function blinkLoop() {
-                // Variação de brilho de 1% para manter a TV ativa
                 const brightness = 1 + Math.sin(frameCount * 0.05) * 0.01;
                 ctx.filter = `brightness(${brightness})`;
                 drawImageContained(ctx, img, canvas.width, canvas.height);
@@ -248,7 +256,6 @@
         }
 
         function drawImageContained(ctx, img, targetWidth, targetHeight) {
-            // Limpar o canvas com a cor de fundo
             const bgHex = document.documentElement.style.getPropertyValue('--bg-color').replace('#', '').trim() || '000000';
             ctx.fillStyle = `#${bgHex}`;
             ctx.fillRect(0, 0, targetWidth, targetHeight);
