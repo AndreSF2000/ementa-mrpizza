@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>MR. Pizza - TV Display</title>
     <style>
-        /* Reset Agresivo para TVs */
         * {
             margin: 0;
             padding: 0;
@@ -16,16 +15,14 @@
             width: 100%;
             height: 100%;
             background-color: #000;
-            overflow: hidden; /* Evita scrollbars */
+            overflow: hidden;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             cursor: none;
-            /* Impede gestos de zoom/pinch na TV */
             touch-action: none;
             -webkit-user-select: none;
             user-select: none;
         }
 
-        /* Container Fixo: Garante que ocupa exatamente o ecrã */
         .display-container {
             position: fixed;
             top: 0;
@@ -39,11 +36,11 @@
             z-index: 1;
         }
 
-        video, canvas {
+        video {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            background-color: transparent;
+            background-color: #000;
             pointer-events: none;
             display: block;
         }
@@ -86,14 +83,6 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-
-        .error-message {
-            color: #fff;
-            font-size: 2rem;
-            text-align: center;
-            padding: 2rem;
-            display: none;
-        }
     </style>
 </head>
 <body>
@@ -106,8 +95,17 @@
     </div>
 
     <script>
+        // =========================================================================
+        // CONFIGURAÇÃO DE ASSETS
+        // =========================================================================
         const ASSETS = {
+            // Vídeo dos Menus
             video: "https://raw.githubusercontent.com/AndreSF2000/ementa-mrpizza/main/menus-mr-ermesinde-out-2026.mp4",
+            
+            // Vídeo do Preçário (Link exato com espaço codificado %20)
+            priceVideo: "https://raw.githubusercontent.com/AndreSF2000/ementa-mrpizza/refs/heads/main/precario%20video.mp4",
+            
+            // Imagem de Fallback (Se o vídeo do preçário falhar)
             price: "https://raw.githubusercontent.com/AndreSF2000/ementa-mrpizza/main/menu-tv-fixo.png"
         };
 
@@ -118,7 +116,6 @@
         const displayArea = document.getElementById('displayArea');
         const loader = document.getElementById('loader');
 
-        // Aplicar a cor de fundo personalizada
         document.documentElement.style.setProperty('--bg-color', `#${bgColor}`);
 
         function hideLoader() {
@@ -132,17 +129,23 @@
 
         function initDisplay() {
             if (mode === 'video') {
-                renderVideo();
+                renderVideo(ASSETS.video);
             } else if (mode === 'price') {
-                renderPriceAsVideo();
+                // Tenta carregar o vídeo do preçário
+                renderVideo(ASSETS.priceVideo, true);
             } else {
                 showError("Modo inválido. Use ?mode=video ou ?mode=price");
             }
         }
 
-        function renderVideo() {
+        /**
+         * Função genérica para renderizar vídeo.
+         * @param {string} src - URL do vídeo
+         * @param {boolean} hasFallback - Se true, e o vídeo falhar, mostra a imagem estática
+         */
+        function renderVideo(src, hasFallback = false) {
             const video = document.createElement('video');
-            video.src = ASSETS.video;
+            video.src = src;
             video.autoplay = true;
             video.loop = true;
             video.muted = true;
@@ -173,7 +176,13 @@
             });
 
             video.onerror = () => {
-                showError("Erro ao carregar vídeo. Verifique a internet.");
+                console.error("Erro ao carregar vídeo:", src);
+                if (hasFallback) {
+                    console.log("A usar fallback de imagem estática...");
+                    renderStaticImage();
+                } else {
+                    showError("Erro ao carregar vídeo. Verifique a internet.");
+                }
             };
 
             displayArea.appendChild(video);
@@ -187,50 +196,7 @@
             });
         }
 
-        async function renderPriceAsVideo() {
-            try {
-                // 1. Carregar a Imagem AGORA
-                const img = await loadImage(ASSETS.price);
-                
-                // 2. Criar Canvas APENAS DEPOIS da imagem estar carregada
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d', { willReadFrequently: true });
-                
-                canvas.width = 1920;
-                canvas.height = 1080;
-
-                // 3. Desenhar a Imagem no Canvas
-                drawImageContained(ctx, img, canvas.width, canvas.height);
-
-                // 4. Adicionar o Canvas ao DOM
-                displayArea.appendChild(canvas);
-
-                // 5. Iniciar o Blink Subtil (Anti-Sleep)
-                startCanvasBlink(canvas, ctx, img);
-
-                // 6. Esconder o Loader
-                hideLoader();
-
-            } catch (error) {
-                console.error("Erro ao gerar vídeo da imagem", error);
-                fallbackStaticImage();
-            }
-        }
-
-        function startCanvasBlink(canvas, ctx, img) {
-            let frameCount = 0;
-            function blinkLoop() {
-                const brightness = 1 + Math.sin(frameCount * 0.05) * 0.01;
-                ctx.filter = `brightness(${brightness})`;
-                drawImageContained(ctx, img, canvas.width, canvas.height);
-                ctx.filter = 'none';
-                frameCount++;
-                requestAnimationFrame(blinkLoop);
-            }
-            blinkLoop();
-        }
-
-        function fallbackStaticImage() {
+        function renderStaticImage() {
             const imgElement = document.createElement('img');
             imgElement.src = ASSETS.price;
             imgElement.alt = "Preçário MR. Pizza";
@@ -243,40 +209,6 @@
 
             imgElement.onload = hideLoader;
             displayArea.appendChild(imgElement);
-        }
-
-        function loadImage(url) {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                img.crossOrigin = 'anonymous';
-                img.onload = () => resolve(img);
-                img.onerror = reject;
-                img.src = url;
-            });
-        }
-
-        function drawImageContained(ctx, img, targetWidth, targetHeight) {
-            const bgHex = document.documentElement.style.getPropertyValue('--bg-color').replace('#', '').trim() || '000000';
-            ctx.fillStyle = `#${bgHex}`;
-            ctx.fillRect(0, 0, targetWidth, targetHeight);
-
-            const imgAspect = img.width / img.height;
-            const canvasAspect = targetWidth / targetHeight;
-            
-            let drawWidth, drawHeight;
-            
-            if (imgAspect > canvasAspect) {
-                drawWidth = targetWidth;
-                drawHeight = targetWidth / imgAspect;
-            } else {
-                drawHeight = targetHeight;
-                drawWidth = targetHeight * imgAspect;
-            }
-
-            const offsetX = (targetWidth - drawWidth) / 2;
-            const offsetY = (targetHeight - drawHeight) / 2;
-
-            ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
         }
 
         function showError(message) {
