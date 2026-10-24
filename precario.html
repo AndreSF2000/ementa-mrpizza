@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<title>MR. Pizza — a abrir o preçário</title>
+<!--
+  Este ficheiro existe só para o link antigo (precario.html) não ficar em branco
+  na TV. O ecrã do preçário é agora o index.html?mode=price.
+-->
+<script>location.replace('./?mode=price' + (location.search ? '&' + location.search.slice(1) : ''));</script>
+<style>
+    html, body { margin: 0; height: 100%; background: #000; color: #fff; font: 500 18px system-ui, sans-serif; }
+    body { display: flex; align-items: center; justify-content: center; }
+</style>
+</head>
+<body>
+    <p>A abrir o preçário…</p>
+    <noscript><p><a href="./?mode=price" style="color:#8bd450">Abrir o preçário</a></p></noscript>
+</body>
+</html>
