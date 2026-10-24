@@ -1,0 +1,16 @@
+MR. PIZZA - LINKS IMPORTANTES
+=============================
+
+TV1 - MENUS / VÍDEO
+https://andresf2000.github.io/ementa-mrpizza/index.html?mode=video
+
+TV2 - PREÇÁRIO
+https://andresf2000.github.io/ementa-mrpizza/index.html?mode=price
+
+PAINEL PARA FORÇAR ATUALIZAÇÃO
+https://andresf2000.github.io/ementa-mrpizza/painel.html
+
+=============================
+EDITOR LOCAL
+Abrir editor.cmd ou http://127.0.0.1:8099
+=============================
