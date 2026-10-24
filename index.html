@@ -656,7 +656,49 @@ async function arrancar() {
 
     desenharDecoracoes();
     iniciarVerificacaoAtualizacoes();
+    manterAtivo();
 }
+
+/* ------------------------------------------------------------------
+   MANTER TV ATIVA (anti-standby)
+   ------------------------------------------------------------------ */
+async function manterAtivo() {
+    try {
+        if ('wakeLock' in navigator) {
+            await navigator.wakeLock.request('screen');
+        }
+    } catch (e) {}
+}
+
+manterAtivo();
+setInterval(manterAtivo, 60000);
+
+setInterval(() => {
+    try {
+        window.dispatchEvent(new Event('mousemove'));
+        window.dispatchEvent(new Event('touchstart'));
+    } catch (e) {}
+}, 120000);
+
+function iniciarAudioSilencioso() {
+    try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        gain.gain.value = 0.0001;
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+    } catch (e) {}
+}
+
+document.addEventListener('click', iniciarAudioSilencioso, { once: true });
+document.addEventListener('touchstart', iniciarAudioSilencioso, { once: true });
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) manterAtivo();
+});
 
 /* ------------------------------------------------------------------
    FORÇAR ATUALIZAÇÃO REMOTA
