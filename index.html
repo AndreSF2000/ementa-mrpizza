@@ -98,6 +98,42 @@
         pointer-events: none;
     }
 
+    /* Figuras vetoriais (abóbora, árvore, …) */
+    .figura { width: 100%; }
+    .figura svg {
+        display: block;
+        width: 100%;
+        height: auto;
+        /* sombra suave: as figuras claras continuam a ver-se sobre fundos claros */
+        filter: drop-shadow(0 3px 7px rgba(0, 0, 0, .38));
+    }
+
+    /* Efeitos animados (neve, morcegos, …) ocupam o palco todo */
+    .decoracao.efeito {
+        inset: 0;
+        width: 100%;
+        height: 100%;
+    }
+
+    .efeito-canvas {
+        position: absolute;
+        inset: 0;
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+
+    .anim-flutuar { animation: flutuar 6s ease-in-out infinite; }
+    @keyframes flutuar { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7%); } }
+
+    .anim-balancar { transform-origin: 50% 100%; animation: balancar 5s ease-in-out infinite; }
+    @keyframes balancar { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
+
+    .anim-pulsar { transform-origin: 50% 50%; animation: pulsar 3.4s ease-in-out infinite; }
+    @keyframes pulsar { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+
+    .anim-girar { transform-origin: 50% 50%; animation: girar 45s linear infinite; }
+
     .loading-overlay {
         position: fixed;
         inset: 0;
@@ -175,18 +211,20 @@
     <p>A carregar conteúdo…</p>
 </div>
 
+<script src="efeitos.js"></script>
 <script>
 /* ------------------------------------------------------------------
    CONFIGURAÇÃO
    ------------------------------------------------------------------ */
-const VERSAO = '2026-10-25';
+const VERSAO = '2026-10-25b';
 
 const ASSETS = {
     menus: 'menus-mr-ermesinde-out-2026.mp4',
     precario: 'menu-tv-fixo.png',
     logotipo: 'mrpizza.mp4',
     logotipoReserva: 'logotipo-chef.png',
-    config: 'decoracoes.json'
+    config: 'decoracoes.json',
+    efeitos: 'efeitos.js'
 };
 
 /* Recorte do chef dentro do vídeo (fundo verde) */
@@ -324,11 +362,54 @@ async function carregarConfig() {
     }
 }
 
+/* Efeitos que reagem às mudanças de slide do vídeo dos menus */
+const efeitosSincronizados = [];
+
 function desenharDecoracoes() {
     const alvo = MODO === 'video' ? 'video' : 'preco';
 
     cfg.decoracoes.forEach((d) => {
         if (Array.isArray(d.ecras) && d.ecras.length && !d.ecras.includes(alvo)) return;
+
+        /* Efeito animado (neve, morcegos, fogos…) */
+        if (d.tipo === 'efeito') {
+            if (!d.efeito || typeof iniciarEfeito !== 'function') return;
+            const caixa = document.createElement('div');
+            caixa.className = 'decoracao efeito';
+            if (d.opacidade != null) caixa.style.opacity = d.opacidade;
+            palco.appendChild(caixa);
+            try {
+                const efeito = iniciarEfeito(d.efeito, caixa);
+                if (d.sincronizar !== false) efeitosSincronizados.push(efeito);
+            } catch (e) {
+                caixa.remove();
+            }
+            return;
+        }
+
+        /* Figura vetorial (abóbora, árvore, estrela…) */
+        if (d.tipo === 'figura') {
+            const html = typeof svgFigura === 'function' ? svgFigura(d.figura, d.cor) : '';
+            if (!html) return;
+
+            const caixa = document.createElement('div');
+            caixa.className = 'decoracao';
+            caixa.style.left = (d.x ?? 0) + '%';
+            caixa.style.top = (d.y ?? 0) + '%';
+            caixa.style.width = (d.largura ?? 10) + '%';
+            if (d.opacidade != null) caixa.style.opacity = d.opacidade;
+            if (d.rotacao) caixa.style.transform = 'rotate(' + d.rotacao + 'deg)';
+
+            const dentro = document.createElement('div');
+            dentro.className = 'figura' + (d.anim ? ' anim-' + d.anim : '');
+            dentro.innerHTML = html;
+
+            caixa.appendChild(dentro);
+            palco.appendChild(caixa);
+            return;
+        }
+
+        /* Imagem enviada pelo editor */
         if (!d.ficheiro) return;
 
         const img = document.createElement('img');
@@ -337,14 +418,65 @@ function desenharDecoracoes() {
         img.style.left = (d.x ?? 0) + '%';
         img.style.top = (d.y ?? 0) + '%';
         img.style.width = (d.largura ?? 15) + '%';
-        if (d.opacidade != null) img.style.opacity = d.opacidade;
         if (d.rotacao) img.style.transform = 'rotate(' + d.rotacao + 'deg)';
+        if (d.anim) img.classList.add('anim-' + d.anim);
+        if (d.opacidade != null) img.style.opacity = d.opacidade;
 
         const versao = encodeURIComponent(cfg.versao || '1');
         img.src = d.ficheiro + (d.ficheiro.includes('?') ? '&' : '?') + 'v=' + versao;
 
         palco.appendChild(img);
     });
+}
+
+/*
+ * Deteta quando o vídeo dos menus muda de slide (a imagem muda de repente)
+ * e avisa os efeitos para darem uma rajada nesse momento.
+ */
+function vigiarDeslizes(video) {
+    const lona = document.createElement('canvas');
+    lona.width = 48;
+    lona.height = 27;
+    const ctx = lona.getContext('2d', { willReadFrequently: true });
+
+    let anterior = null;
+    let ultimaLeitura = 0;
+    let ultimoAviso = 0;
+
+    const id = setInterval(() => {
+        if (document.hidden || video.readyState < 2 || video.paused) return;
+
+        const agora = performance.now();
+        if (agora - ultimaLeitura < 400) return;
+        ultimaLeitura = agora;
+
+        try {
+            ctx.drawImage(video, 0, 0, 48, 27);
+        } catch (e) {
+            return;
+        }
+
+        const dados = ctx.getImageData(0, 0, 48, 27).data;
+
+        if (anterior) {
+            let soma = 0;
+            for (let i = 0; i < dados.length; i += 4) {
+                soma += Math.abs(dados[i] - anterior[i])
+                    + Math.abs(dados[i + 1] - anterior[i + 1])
+                    + Math.abs(dados[i + 2] - anterior[i + 2]);
+            }
+            const media = soma / (48 * 27 * 3);
+
+            if (media > 18 && agora - ultimoAviso > 1500) {
+                ultimoAviso = agora;
+                efeitosSincronizados.forEach((e) => { try { e.rajada(); } catch (x) {} });
+            }
+        }
+
+        anterior = dados;
+    }, 450);
+
+    temporizadores.push(id);
 }
 
 /* ------------------------------------------------------------------
@@ -396,6 +528,7 @@ function ecraVideo() {
     palco.appendChild(video);
     tocar(video);
     vigiarVideo(video);
+    vigiarDeslizes(video);
 }
 
 /* ------------------------------------------------------------------
@@ -572,12 +705,13 @@ async function marcaDe(url) {
 }
 
 async function marcaAtual() {
-    const [html, config] = await Promise.all([
+    const [html, config, efeitos] = await Promise.all([
         marcaDe(location.pathname),
-        marcaDe(ASSETS.config)
+        marcaDe(ASSETS.config),
+        marcaDe(ASSETS.efeitos)
     ]);
-    if (!html && !config) return null;
-    return (html || '') + '|' + (config || '');
+    if (!html && !config && !efeitos) return null;
+    return (html || '') + '|' + (config || '') + '|' + (efeitos || '');
 }
 
 function avisarAtualizacao() {
