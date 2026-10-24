@@ -322,8 +322,6 @@
         fogos: 'Fogos de artifício'
     };
 
-    function sorteio(min, max) { return min + Math.random() * (max - min); }
-
     function iniciarEfeito(nome, host, opcoes) {
         const op = opcoes || {};
         const canvas = document.createElement('canvas');
@@ -331,243 +329,642 @@
         host.appendChild(canvas);
 
         const ctx = canvas.getContext('2d');
-        const particulas = [];
+
         let w = 1;
         let h = 1;
         let ligado = true;
         let ultimo = performance.now();
         let relogio = 0;
-        let proximoFogo = 400;
+        let proximoFoguete = 800;
 
-        function medir() {
-            const r = host.getBoundingClientRect();
-            const nw = Math.max(1, Math.round(r.width));
-            const nh = Math.max(1, Math.round(r.height));
-            if (nw === w && nh === h) return;
-            w = nw;
-            h = nh;
-            canvas.width = w;
-            canvas.height = h;
+        const particulas = [];
+        const foguetes = [];
+        const claroes = [];
+        const ambiente = [];
+        const cache = new Map();
+
+        function escala() { return Math.max(0.62, Math.min(1.45, w / 1500)); }
+        function sorteio(min, max) { return min + Math.random() * (max - min); }
+        function escolha(lista) { return lista[(Math.random() * lista.length) | 0]; }
+
+        /* ------------------------------------------------------------------
+           Sprites: cada partícula é desenhada uma vez num canvas pequeno e
+           depois só é copiada. Dá contornos suaves e brilho sem gastar CPU.
+           ------------------------------------------------------------------ */
+        const PALETA = {
+            neve: ['235,246,255', '214,236,255', '255,255,255'],
+            brilho: ['255,226,160', '255,244,214', '255,205,120'],
+            coracao: ['255,120,155', '255,160,190', '255,90,130'],
+            petala: ['255,158,196', '255,185,214', '247,127,174', '255,210,228'],
+            folha: ['224,122,31', '198,90,18', '232,165,49', '168,67,12'],
+            confete: ['226,58,80', '24,150,94', '47,107,216', '242,167,18', '139,92,246', '236,72,153'],
+            bolha: ['220,244,255', '186,228,255'],
+            fogo: ['255,110,60', '255,64,120', '96,190,255', '255,206,90', '172,120,255', '96,240,190', '255,244,214'],
+            bokeh: {
+                neve: '190,220,255',
+                brilhos: '255,214,150',
+                fogos: '255,205,150',
+                coracoes: '255,130,160',
+                petalas: '255,190,210',
+                bolhas: '150,215,255',
+                folhas: '255,180,110',
+                confetes: '255,225,170'
+            }
+        };
+
+        function sprite(tipo, raio, cor) {
+            const chave = tipo + ':' + Math.round(raio * 10) + ':' + (cor || '');
+            const guardado = cache.get(chave);
+            if (guardado) return guardado;
+
+            const lado = Math.max(12, Math.ceil(raio * 4));
+            const c = document.createElement('canvas');
+            c.width = lado;
+            c.height = lado;
+
+            const g = c.getContext('2d');
+            g.translate(lado / 2, lado / 2);
+            g.scale(2, 2);
+
+            desenharSprite(g, tipo, raio, cor || '255,255,255');
+
+            cache.set(chave, c);
+            return c;
         }
 
-        /* ---------- criação de partículas ---------- */
-        const CORES_CONFETE = ['#ff5f5f', '#ffd93d', '#6ee7a8', '#61c8ff', '#c58fff', '#ff9f68'];
-        const CORES_FOLHA = ['#e07a1f', '#c85a12', '#e8a531', '#a8430c', '#f0b541'];
-        const CORES_PETALA = ['#ff9ec4', '#ffb3d1', '#f77fae', '#ffc9de'];
+        function desenharSprite(g, tipo, r, cor) {
+            switch (tipo) {
+                case 'disco': {
+                    const grad = g.createRadialGradient(0, 0, 0, 0, 0, r);
+                    grad.addColorStop(0, 'rgba(' + cor + ',1)');
+                    grad.addColorStop(0.45, 'rgba(' + cor + ',.85)');
+                    grad.addColorStop(1, 'rgba(' + cor + ',0)');
+                    g.fillStyle = grad;
+                    g.beginPath();
+                    g.arc(0, 0, r, 0, 6.3);
+                    g.fill();
+                    break;
+                }
 
+                case 'floco': {
+                    g.strokeStyle = 'rgba(' + cor + ',.95)';
+                    g.lineWidth = Math.max(1, r * 0.17);
+                    g.lineCap = 'round';
+                    g.shadowColor = 'rgba(' + cor + ',.9)';
+                    g.shadowBlur = r * 1.6;
+                    for (let i = 0; i < 6; i++) {
+                        g.save();
+                        g.rotate(i * Math.PI / 3);
+                        g.beginPath();
+                        g.moveTo(0, 0);
+                        g.lineTo(0, -r * 0.9);
+                        g.stroke();
+                        g.beginPath();
+                        g.moveTo(0, -r * 0.48);
+                        g.lineTo(r * 0.3, -r * 0.7);
+                        g.moveTo(0, -r * 0.48);
+                        g.lineTo(-r * 0.3, -r * 0.7);
+                        g.stroke();
+                        g.restore();
+                    }
+                    g.shadowBlur = 0;
+                    g.fillStyle = 'rgba(255,255,255,.95)';
+                    g.beginPath();
+                    g.arc(0, 0, r * 0.14, 0, 6.3);
+                    g.fill();
+                    break;
+                }
+
+                case 'brilho': {
+                    const halo = g.createRadialGradient(0, 0, 0, 0, 0, r);
+                    halo.addColorStop(0, 'rgba(255,255,255,.92)');
+                    halo.addColorStop(0.16, 'rgba(' + cor + ',.75)');
+                    halo.addColorStop(0.55, 'rgba(' + cor + ',.18)');
+                    halo.addColorStop(1, 'rgba(' + cor + ',0)');
+                    g.fillStyle = halo;
+                    g.beginPath();
+                    g.arc(0, 0, r, 0, 6.3);
+                    g.fill();
+
+                    const raios = g.createLinearGradient(0, -r, 0, r);
+                    raios.addColorStop(0, 'rgba(255,255,255,0)');
+                    raios.addColorStop(0.5, 'rgba(255,255,255,.9)');
+                    raios.addColorStop(1, 'rgba(255,255,255,0)');
+                    g.fillStyle = raios;
+                    g.fillRect(-r * 0.055, -r, r * 0.11, r * 2);
+                    g.fillRect(-r, -r * 0.055, r * 2, r * 0.11);
+                    break;
+                }
+
+                case 'bokeh': {
+                    const grad = g.createRadialGradient(0, 0, 0, 0, 0, r);
+                    grad.addColorStop(0, 'rgba(' + cor + ',.16)');
+                    grad.addColorStop(0.68, 'rgba(' + cor + ',.11)');
+                    grad.addColorStop(0.85, 'rgba(' + cor + ',.19)');
+                    grad.addColorStop(1, 'rgba(' + cor + ',0)');
+                    g.fillStyle = grad;
+                    g.beginPath();
+                    g.arc(0, 0, r, 0, 6.3);
+                    g.fill();
+                    break;
+                }
+
+                case 'coracao': {
+                    g.shadowColor = 'rgba(' + cor + ',.85)';
+                    g.shadowBlur = r * 0.9;
+                    const grad = g.createLinearGradient(0, -r, 0, r);
+                    grad.addColorStop(0, 'rgba(255,190,210,.95)');
+                    grad.addColorStop(0.55, 'rgba(' + cor + ',.92)');
+                    grad.addColorStop(1, 'rgba(' + cor + ',.75)');
+                    g.fillStyle = grad;
+                    g.beginPath();
+                    g.moveTo(0, r * 0.78);
+                    g.bezierCurveTo(-r * 1.25, -r * 0.06, -r * 0.58, -r * 1.02, 0, -r * 0.3);
+                    g.bezierCurveTo(r * 0.58, -r * 1.02, r * 1.25, -r * 0.06, 0, r * 0.78);
+                    g.fill();
+                    g.shadowBlur = 0;
+                    break;
+                }
+
+                case 'petala': {
+                    const grad = g.createLinearGradient(0, -r, 0, r);
+                    grad.addColorStop(0, 'rgba(255,255,255,.55)');
+                    grad.addColorStop(0.5, 'rgba(' + cor + ',.92)');
+                    grad.addColorStop(1, 'rgba(' + cor + ',.6)');
+                    g.fillStyle = grad;
+                    g.shadowColor = 'rgba(' + cor + ',.45)';
+                    g.shadowBlur = r * 0.8;
+                    g.beginPath();
+                    g.moveTo(0, -r);
+                    g.bezierCurveTo(r * 0.85, -r * 0.55, r * 0.7, r * 0.6, 0, r);
+                    g.bezierCurveTo(-r * 0.7, r * 0.6, -r * 0.85, -r * 0.55, 0, -r);
+                    g.fill();
+                    g.shadowBlur = 0;
+                    break;
+                }
+
+                case 'folha': {
+                    const grad = g.createLinearGradient(0, -r, 0, r);
+                    grad.addColorStop(0, 'rgba(' + cor + ',.95)');
+                    grad.addColorStop(1, 'rgba(' + cor + ',.7)');
+                    g.fillStyle = grad;
+                    g.shadowColor = 'rgba(0,0,0,.35)';
+                    g.shadowBlur = r * 0.5;
+                    g.beginPath();
+                    g.moveTo(-r, 0);
+                    g.quadraticCurveTo(-r * 0.2, -r * 0.85, r, 0);
+                    g.quadraticCurveTo(-r * 0.2, r * 0.85, -r, 0);
+                    g.fill();
+                    g.shadowBlur = 0;
+                    g.strokeStyle = 'rgba(255,255,255,.32)';
+                    g.lineWidth = Math.max(0.8, r * 0.08);
+                    g.beginPath();
+                    g.moveTo(-r * 0.8, 0);
+                    g.lineTo(r * 0.75, 0);
+                    g.stroke();
+                    break;
+                }
+
+                case 'bolha': {
+                    const grad = g.createRadialGradient(0, 0, r * 0.2, 0, 0, r);
+                    grad.addColorStop(0, 'rgba(' + cor + ',.05)');
+                    grad.addColorStop(0.82, 'rgba(' + cor + ',.10)');
+                    grad.addColorStop(1, 'rgba(' + cor + ',.55)');
+                    g.fillStyle = grad;
+                    g.beginPath();
+                    g.arc(0, 0, r, 0, 6.3);
+                    g.fill();
+                    g.strokeStyle = 'rgba(255,255,255,.55)';
+                    g.lineWidth = Math.max(0.9, r * 0.09);
+                    g.beginPath();
+                    g.arc(0, 0, r * 0.96, 0, 6.3);
+                    g.stroke();
+                    g.fillStyle = 'rgba(255,255,255,.75)';
+                    g.beginPath();
+                    g.ellipse(-r * 0.34, -r * 0.38, r * 0.17, r * 0.11, -0.7, 0, 6.3);
+                    g.fill();
+                    break;
+                }
+
+                case 'confete': {
+                    /* fita metalizada: cor sólida, com um brilho branco ao centro */
+                    g.fillStyle = 'rgba(' + cor + ',.97)';
+                    g.fillRect(-r, -r * 0.26, r * 2, r * 0.52);
+                    const brilho = g.createLinearGradient(-r, 0, r, 0);
+                    brilho.addColorStop(0, 'rgba(255,255,255,0)');
+                    brilho.addColorStop(0.45, 'rgba(255,255,255,.7)');
+                    brilho.addColorStop(0.62, 'rgba(255,255,255,0)');
+                    g.fillStyle = brilho;
+                    g.fillRect(-r, -r * 0.26, r * 2, r * 0.52);
+                    break;
+                }
+
+                case 'flash': {
+                    const grad = g.createRadialGradient(0, 0, 0, 0, 0, r);
+                    grad.addColorStop(0, 'rgba(255,255,255,.9)');
+                    grad.addColorStop(0.3, 'rgba(' + cor + ',.55)');
+                    grad.addColorStop(1, 'rgba(' + cor + ',0)');
+                    g.fillStyle = grad;
+                    g.beginPath();
+                    g.arc(0, 0, r, 0, 6.3);
+                    g.fill();
+                    break;
+                }
+
+                default:
+                    break;
+            }
+        }
+
+        /* ------------------------------------------------------------------
+           Partículas
+           ------------------------------------------------------------------ */
         function nova(tipo, inicial) {
+            const z = 0.45 + Math.random() * 0.95;    // profundidade (perto/longe)
+
             switch (tipo) {
                 case 'neve':
                     return {
-                        x: sorteio(-20, w + 20), y: inicial ? sorteio(-h, h) : sorteio(-60, -10),
-                        r: sorteio(2.2, 5.2) * escala(), vy: sorteio(20, 52) * escala(),
-                        fase: sorteio(0, 6.3), a: sorteio(.55, 1)
+                        z: z,
+                        x: sorteio(-30, w + 30),
+                        y: inicial ? sorteio(-h, h) : sorteio(-80, -10),
+                        r: sorteio(1.7, 3.3) * z,
+                        vy: sorteio(13, 27) * z,
+                        fase: sorteio(0, 6.3),
+                        giro: sorteio(0, 6.3),
+                        vg: sorteio(-0.5, 0.5),
+                        a: Math.min(1, 0.34 + z * 0.55),
+                        cor: escolha(PALETA.neve)
                     };
+
                 case 'morcegos':
                     return {
-                        x: inicial ? sorteio(0, w) : (Math.random() < .5 ? -60 : w + 60),
-                        y: sorteio(h * .06, h * .55),
-                        r: sorteio(13, 24) * escala(),
-                        vx: (Math.random() < .5 ? 1 : -1) * sorteio(45, 95) * escala(),
-                        fase: sorteio(0, 6.3), a: .92
+                        z: z,
+                        x: inicial ? sorteio(0, w) : (Math.random() < 0.5 ? -70 : w + 70),
+                        y: sorteio(h * 0.06, h * 0.55),
+                        r: sorteio(11, 22) * (0.7 + z * 0.5),
+                        vx: (Math.random() < 0.5 ? 1 : -1) * sorteio(38, 82),
+                        fase: sorteio(0, 6.3),
+                        a: Math.min(1, 0.55 + z * 0.4)
                     };
+
                 case 'brilhos':
                     return {
-                        x: sorteio(0, w), y: sorteio(0, h),
-                        r: sorteio(4, 11) * escala(), fase: sorteio(0, 6.3),
-                        vel: sorteio(.6, 1.9), a: 1
+                        z: z,
+                        x: sorteio(0, w),
+                        y: sorteio(0, h),
+                        r: sorteio(6, 15) * (0.6 + z * 0.55),
+                        cor: escolha(PALETA.brilho),
+                        vel: sorteio(0.35, 1.25),
+                        fase: sorteio(0, 6.3),
+                        vx: sorteio(-5, 5),
+                        vy: sorteio(-7, -1),
+                        a: 1
                     };
+
                 case 'confetes':
                     return {
-                        x: sorteio(-10, w + 10), y: inicial ? sorteio(-h, h) : sorteio(-80, -10),
-                        r: sorteio(3.5, 7) * escala(), vy: sorteio(55, 130) * escala(),
-                        vx: sorteio(-25, 25) * escala(), rot: sorteio(0, 6.3), vr: sorteio(-3, 3),
-                        cor: CORES_CONFETE[(Math.random() * CORES_CONFETE.length) | 0], a: .75
+                        z: z,
+                        x: sorteio(-10, w + 10),
+                        y: inicial ? sorteio(-h, h) : sorteio(-90, -10),
+                        r: sorteio(4.5, 8.2) * (0.7 + z * 0.45),
+                        vy: sorteio(34, 78) * z,
+                        vx: sorteio(-16, 16) * z,
+                        rot: sorteio(0, 6.3),
+                        vr: sorteio(-2.6, 2.6),
+                        fase: sorteio(0, 6.3),
+                        cor: escolha(PALETA.confete),
+                        a: 0.75 + z * 0.25
                     };
+
                 case 'coracoes':
                     return {
-                        x: sorteio(0, w), y: inicial ? sorteio(0, h) : h + sorteio(20, 90),
-                        r: sorteio(10, 22) * escala(), vy: -sorteio(20, 48) * escala(),
-                        fase: sorteio(0, 6.3), a: sorteio(.55, .9)
+                        z: z,
+                        x: sorteio(-10, w + 10),
+                        y: inicial ? sorteio(0, h) : h + sorteio(30, 110),
+                        r: sorteio(7, 15) * (0.6 + z * 0.5),
+                        vy: -sorteio(15, 34) * z,
+                        fase: sorteio(0, 6.3),
+                        cor: escolha(PALETA.coracao),
+                        a: 0.35 + z * 0.5
                     };
+
                 case 'petalas':
                     return {
-                        x: sorteio(-10, w + 10), y: inicial ? sorteio(-h, h) : sorteio(-70, -10),
-                        r: sorteio(7, 14) * escala(), vy: sorteio(22, 55) * escala(),
-                        vx: sorteio(-18, 18) * escala(), rot: sorteio(0, 6.3), vr: sorteio(-1.6, 1.6),
-                        cor: CORES_PETALA[(Math.random() * CORES_PETALA.length) | 0], a: .85
+                        z: z,
+                        x: sorteio(-10, w + 10),
+                        y: inicial ? sorteio(-h, h) : sorteio(-80, -10),
+                        r: sorteio(5, 10) * (0.7 + z * 0.45),
+                        vy: sorteio(18, 42) * z,
+                        vx: sorteio(-12, 12) * z,
+                        rot: sorteio(0, 6.3),
+                        vr: sorteio(-1.4, 1.4),
+                        fase: sorteio(0, 6.3),
+                        cor: escolha(PALETA.petala),
+                        a: 0.55 + z * 0.38
                     };
+
                 case 'bolhas':
                     return {
-                        x: sorteio(0, w), y: inicial ? sorteio(0, h) : h + sorteio(20, 80),
-                        r: sorteio(6, 22) * escala(), vy: -sorteio(28, 70) * escala(),
-                        fase: sorteio(0, 6.3), a: sorteio(.25, .6)
+                        z: z,
+                        x: sorteio(0, w),
+                        y: inicial ? sorteio(0, h) : h + sorteio(30, 120),
+                        r: sorteio(8, 20) * (0.6 + z * 0.5),
+                        vy: -sorteio(16, 40) * z,
+                        fase: sorteio(0, 6.3),
+                        cor: escolha(PALETA.bolha),
+                        a: 0.3 + z * 0.4
                     };
+
                 case 'folhas':
                     return {
-                        x: sorteio(-10, w + 10), y: inicial ? sorteio(-h, h) : sorteio(-70, -10),
-                        r: sorteio(9, 18) * escala(), vy: sorteio(30, 70) * escala(),
-                        vx: sorteio(-30, 30) * escala(), rot: sorteio(0, 6.3), vr: sorteio(-2, 2),
-                        cor: CORES_FOLHA[(Math.random() * CORES_FOLHA.length) | 0], a: .95
+                        z: z,
+                        x: sorteio(-10, w + 10),
+                        y: inicial ? sorteio(-h, h) : sorteio(-80, -10),
+                        r: sorteio(7, 14) * (0.7 + z * 0.45),
+                        vy: sorteio(24, 52) * z,
+                        vx: sorteio(-22, 22) * z,
+                        rot: sorteio(0, 6.3),
+                        vr: sorteio(-1.8, 1.8),
+                        fase: sorteio(0, 6.3),
+                        cor: escolha(PALETA.folha),
+                        a: 0.55 + z * 0.4
                     };
-                case 'fogos':
-                    return {
-                        x: 0, y: 0, r: sorteio(2, 4) * escala(), vx: 0, vy: 0,
-                        cor: CORES_CONFETE[(Math.random() * CORES_CONFETE.length) | 0],
-                        a: 1, vida: 1.4
-                    };
+
                 default:
                     return null;
             }
         }
 
-        function escala() { return Math.max(0.65, Math.min(1.5, w / 1500)); }
-
         const BASE = {
-            neve: 90, morcegos: 7, brilhos: 42, confetes: 42, coracoes: 24,
-            petalas: 42, bolhas: 20, folhas: 28, fogos: 0
+            neve: 78, morcegos: 7, brilhos: 30, confetes: 40, coracoes: 20,
+            petalas: 30, bolhas: 18, folhas: 26, fogos: 0
         };
 
+        function medir() {
+            const ret = host.getBoundingClientRect();
+            const nw = Math.max(1, Math.round(ret.width));
+            const nh = Math.max(1, Math.round(ret.height));
+            if (nw === w && nh === h) return;
+
+            /* se o elemento ainda não tinha tamanho quando arrancou (editor),
+               volta a encher as partículas quando o tamanho real é conhecido */
+            const eraMinusculo = w < 40 || h < 40;
+
+            w = nw;
+            h = nh;
+            canvas.width = w;
+            canvas.height = h;
+
+            if (eraMinusculo && w > 40 && h > 40) {
+                particulas.length = 0;
+                ambiente.length = 0;
+                encher();
+            }
+        }
+
         function encher() {
-            const total = (BASE[nome] || 30);
+            const total = BASE[nome] || 26;
             for (let i = 0; i < total; i++) {
                 const p = nova(nome, true);
                 if (p) particulas.push(p);
             }
+
+            /* bokeh: luzes desfocadas ao fundo, dão profundidade */
+            const corBokeh = PALETA.bokeh[nome];
+            if (corBokeh) {
+                const quantos = nome === 'brilhos' || nome === 'fogos' ? 6 : 4;
+                for (let i = 0; i < quantos; i++) {
+                    ambiente.push({
+                        x: sorteio(0, w), y: sorteio(0, h),
+                        r: sorteio(55, 150),
+                        vx: sorteio(-6, 6), vy: sorteio(-4, 4),
+                        a: sorteio(0.05, 0.11),
+                        cor: corBokeh
+                    });
+                }
+            }
         }
 
-        /* ---------- desenho ---------- */
-        function estrela(x, y, r, a) {
-            ctx.globalAlpha = a;
-            ctx.fillStyle = '#fff6cf';
-            ctx.beginPath();
-            ctx.moveTo(x, y - r);
-            ctx.quadraticCurveTo(x + r * .18, y - r * .18, x + r, y);
-            ctx.quadraticCurveTo(x + r * .18, y + r * .18, x, y + r);
-            ctx.quadraticCurveTo(x - r * .18, y + r * .18, x - r, y);
-            ctx.quadraticCurveTo(x - r * .18, y - r * .18, x, y - r);
-            ctx.fill();
+        /* ------------------------------------------------------------------
+           Fogos de artifício: foguete a subir, rasto e rebentamento
+           ------------------------------------------------------------------ */
+        function lancarFoguete() {
+            foguetes.push({
+                x: sorteio(w * 0.14, w * 0.86),
+                y: h * 1.03,
+                vy: -sorteio(h * 0.55, h * 0.85),
+                alvo: sorteio(h * 0.10, h * 0.32),
+                cor: escolha(PALETA.fogo),
+                rasto: []
+            });
         }
 
-        function coracao(x, y, r, a) {
-            ctx.globalAlpha = a;
-            ctx.fillStyle = '#ff5c85';
-            ctx.beginPath();
-            ctx.moveTo(x, y + r * .8);
-            ctx.bezierCurveTo(x - r * 1.3, y - r * .1, x - r * .6, y - r * 1.05, x, y - r * .35);
-            ctx.bezierCurveTo(x + r * .6, y - r * 1.05, x + r * 1.3, y - r * .1, x, y + r * .8);
-            ctx.fill();
+        function rebentar(x, y, cor) {
+            claroes.push({ x: x, y: y, t: 0, cor: cor });
+
+            const total = Math.round(86 * Math.min(1.6, escala() * 1.2));
+            for (let i = 0; i < total; i++) {
+                const ang = (i / total) * Math.PI * 2 + sorteio(-0.05, 0.05);
+                const vel = sorteio(90, 245) * escala();
+                particulas.push({
+                    x: x, y: y,
+                    vx: Math.cos(ang) * vel,
+                    vy: Math.sin(ang) * vel,
+                    r: sorteio(2, 3.4) * escala(),
+                    cor: Math.random() < 0.25 ? escolha(PALETA.fogo) : cor,
+                    a: 1,
+                    vida: sorteio(1.35, 2.1),
+                    vidaTotal: 2.1
+                });
+            }
         }
 
+        /* ------------------------------------------------------------------
+           Desenho
+           ------------------------------------------------------------------ */
         function morcegoForma(x, y, r, a, bater) {
             ctx.save();
             ctx.globalAlpha = a;
-            ctx.fillStyle = '#15151c';
             ctx.translate(x, y);
-            const sobe = Math.sin(bater) * r * .45;
+
+            const sobe = Math.sin(bater) * r * 0.5;
+
+            ctx.fillStyle = '#1b1b26';
+            ctx.shadowColor = 'rgba(150,170,255,.35)';
+            ctx.shadowBlur = r * 1.1;
+
             ctx.beginPath();
             ctx.moveTo(0, 0);
-            ctx.quadraticCurveTo(-r * .7, -r * .55 - sobe, -r * 1.5, -r * .25 + sobe);
-            ctx.quadraticCurveTo(-r * 1.05, r * .1, -r * 1.2, r * .45 + sobe);
-            ctx.quadraticCurveTo(-r * .6, r * .25, -r * .35, r * .55);
-            ctx.quadraticCurveTo(0, r * .25, 0, r * .15);
-            ctx.quadraticCurveTo(0, r * .25, r * .35, r * .55);
-            ctx.quadraticCurveTo(r * .6, r * .25, r * 1.2, r * .45 + sobe);
-            ctx.quadraticCurveTo(r * 1.05, r * .1, r * 1.5, -r * .25 + sobe);
-            ctx.quadraticCurveTo(r * .7, -r * .55 - sobe, 0, 0);
+            ctx.bezierCurveTo(-r * 0.5, -r * 0.5 - sobe, -r * 1.1, -r * 0.5 + sobe, -r * 1.55, -r * 0.18 + sobe * 0.7);
+            ctx.bezierCurveTo(-r * 1.05, r * 0.02, -r * 0.95, r * 0.28, -r * 1.12, r * 0.5 + sobe * 0.25);
+            ctx.bezierCurveTo(-r * 0.62, r * 0.3, -r * 0.42, r * 0.5, -r * 0.3, r * 0.62);
+            ctx.bezierCurveTo(-r * 0.12, r * 0.34, -r * 0.08, r * 0.2, 0, r * 0.18);
+            ctx.bezierCurveTo(r * 0.08, r * 0.2, r * 0.12, r * 0.34, r * 0.3, r * 0.62);
+            ctx.bezierCurveTo(r * 0.42, r * 0.5, r * 0.62, r * 0.3, r * 1.12, r * 0.5 + sobe * 0.25);
+            ctx.bezierCurveTo(r * 0.95, r * 0.28, r * 1.05, r * 0.02, r * 1.55, -r * 0.18 + sobe * 0.7);
+            ctx.bezierCurveTo(r * 1.1, -r * 0.5 + sobe, r * 0.5, -r * 0.5 - sobe, 0, 0);
             ctx.fill();
+
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = 'rgba(186,204,255,.28)';
+            ctx.lineWidth = Math.max(0.7, r * 0.07);
+            ctx.stroke();
             ctx.beginPath();
-            ctx.ellipse(0, 0, r * .17, r * .26, 0, 0, 6.3);
+            ctx.ellipse(0, 0, r * 0.16, r * 0.26, 0, 0, 6.3);
             ctx.fill();
+
             ctx.restore();
         }
 
         function pintar(p) {
             switch (nome) {
-                case 'neve':
+                case 'neve': {
+                    const tipo = p.z > 0.95 ? 'floco' : 'disco';
+                    const raio = tipo === 'floco' ? p.r * 1.35 : p.r;
+                    const sp = sprite(tipo, tipo === 'floco' ? Math.max(2.4, p.r * 1.35) : Math.max(1.6, p.r), p.cor);
                     ctx.globalAlpha = p.a;
-                    ctx.fillStyle = '#f2fbff';
-                    ctx.beginPath();
-                    ctx.arc(p.x, p.y, p.r, 0, 6.3);
-                    ctx.fill();
+                    if (p.z > 0.95) {
+                        ctx.save();
+                        ctx.translate(p.x, p.y);
+                        ctx.rotate(p.giro);
+                        ctx.drawImage(sp, -raio, -raio, raio * 2, raio * 2);
+                        ctx.restore();
+                    } else {
+                        ctx.drawImage(sp, p.x - raio, p.y - raio, raio * 2, raio * 2);
+                    }
                     break;
+                }
+
                 case 'morcegos':
-                    morcegoForma(p.x, p.y + Math.sin(relogio * 1.4 + p.fase) * 14, p.r, p.a, relogio * 9 + p.fase);
+                    morcegoForma(p.x, p.y, p.r, p.a, relogio * 8 + p.fase);
                     break;
-                case 'brilhos':
-                    estrela(p.x, p.y, p.r * (0.55 + 0.55 * Math.abs(Math.sin(relogio * p.vel + p.fase))),
-                        .35 + .6 * Math.abs(Math.sin(relogio * p.vel + p.fase)));
+
+                case 'brilhos': {
+                    const cintila = 0.35 + 0.65 * Math.pow(Math.abs(Math.sin(relogio * p.vel + p.fase)), 1.6);
+                    const raio = p.r * (0.7 + 0.5 * cintila);
+                    const sp = sprite('brilho', Math.max(4, raio), p.cor);
+                    ctx.globalCompositeOperation = 'lighter';
+                    ctx.globalAlpha = cintila;
+                    ctx.drawImage(sp, p.x - raio, p.y - raio, raio * 2, raio * 2);
+                    ctx.globalCompositeOperation = 'source-over';
                     break;
-                case 'confetes':
+                }
+
+                case 'confetes': {
+                    const sp = sprite('confete', Math.max(2, p.r), p.cor);
+                    const dobra = Math.max(0.38, Math.abs(Math.cos(p.rot * 1.15)));
                     ctx.save();
                     ctx.globalAlpha = p.a;
                     ctx.translate(p.x, p.y);
-                    ctx.rotate(p.rot);
-                    ctx.fillStyle = p.cor;
-                    ctx.fillRect(-p.r, -p.r * .45, p.r * 2, p.r * .9);
+                    ctx.rotate(p.rot * 0.35);
+                    ctx.scale(Math.max(0.12, dobra), 1);
+                    ctx.drawImage(sp, -p.r, -p.r, p.r * 2, p.r * 2);
                     ctx.restore();
                     break;
-                case 'coracoes':
-                    coracao(p.x, p.y, p.r, p.a);
+                }
+
+                case 'coracoes': {
+                    const sp = sprite('coracao', Math.max(4, p.r), p.cor);
+                    ctx.globalAlpha = p.a;
+                    ctx.drawImage(sp, p.x - p.r, p.y - p.r, p.r * 2, p.r * 2);
                     break;
-                case 'petalas':
+                }
+
+                case 'petalas': {
+                    const sp = sprite('petala', Math.max(4, p.r), p.cor);
+                    const dobra = Math.cos(p.rot * 1.1);
                     ctx.save();
                     ctx.globalAlpha = p.a;
                     ctx.translate(p.x, p.y);
-                    ctx.rotate(p.rot);
-                    ctx.fillStyle = p.cor;
-                    ctx.beginPath();
-                    ctx.ellipse(0, 0, p.r, p.r * .55, 0, 0, 6.3);
-                    ctx.fill();
+                    ctx.rotate(p.rot * 0.5);
+                    ctx.scale(Math.max(0.25, Math.abs(dobra)), 1);
+                    ctx.drawImage(sp, -p.r, -p.r, p.r * 2, p.r * 2);
                     ctx.restore();
                     break;
-                case 'bolhas':
+                }
+
+                case 'bolhas': {
+                    const sp = sprite('bolha', Math.max(6, p.r), p.cor);
                     ctx.globalAlpha = p.a;
-                    ctx.strokeStyle = '#dff3ff';
-                    ctx.lineWidth = Math.max(1.2, p.r * .12);
+                    ctx.drawImage(sp, p.x - p.r, p.y - p.r, p.r * 2, p.r * 2);
+                    break;
+                }
+
+                case 'folhas': {
+                    const sp = sprite('folha', Math.max(5, p.r), p.cor);
+                    const dobra = Math.cos(p.rot * 1.3);
+                    ctx.save();
+                    ctx.globalAlpha = p.a;
+                    ctx.translate(p.x, p.y);
+                    ctx.rotate(p.rot * 0.4);
+                    ctx.scale(Math.max(0.2, Math.abs(dobra)), 1);
+                    ctx.drawImage(sp, -p.r, -p.r, p.r * 2, p.r * 2);
+                    ctx.restore();
+                    break;
+                }
+
+                case 'fogos': {
+                    const cauda = 0.055;
+                    ctx.globalAlpha = Math.min(1, p.a);
+                    ctx.strokeStyle = 'rgba(' + p.cor + ',' + Math.min(1, p.a) + ')';
+                    ctx.lineWidth = Math.max(1.6, p.r);
+                    ctx.lineCap = 'round';
                     ctx.beginPath();
-                    ctx.arc(p.x, p.y, p.r, 0, 6.3);
+                    ctx.moveTo(p.x - p.vx * cauda, p.y - p.vy * cauda);
+                    ctx.lineTo(p.x, p.y);
                     ctx.stroke();
+
+                    ctx.fillStyle = 'rgba(255,255,255,' + Math.min(1, p.a) * 0.9 + ')';
                     ctx.beginPath();
-                    ctx.arc(p.x - p.r * .35, p.y - p.r * .35, p.r * .18, 0, 6.3);
-                    ctx.fillStyle = '#ffffff';
+                    ctx.arc(p.x, p.y, Math.max(0.9, p.r * 0.62), 0, 6.3);
                     ctx.fill();
                     break;
-                case 'folhas':
-                    ctx.save();
-                    ctx.globalAlpha = p.a;
-                    ctx.translate(p.x, p.y);
-                    ctx.rotate(p.rot);
-                    ctx.fillStyle = p.cor;
-                    ctx.beginPath();
-                    ctx.moveTo(-p.r, 0);
-                    ctx.quadraticCurveTo(0, -p.r * .75, p.r, 0);
-                    ctx.quadraticCurveTo(0, p.r * .75, -p.r, 0);
-                    ctx.fill();
-                    ctx.restore();
-                    break;
-                case 'fogos':
-                    ctx.globalAlpha = Math.max(0, p.a);
-                    ctx.fillStyle = p.cor;
-                    ctx.beginPath();
-                    ctx.arc(p.x, p.y, p.r, 0, 6.3);
-                    ctx.fill();
-                    break;
+                }
+
                 default:
                     break;
             }
         }
 
-        /* ---------- animação ---------- */
+        /* ------------------------------------------------------------------
+           Animação
+           ------------------------------------------------------------------ */
         function atualizar(dt) {
             relogio += dt;
 
             if (nome === 'fogos') {
-                proximoFogo -= dt * 1000;
-                if (proximoFogo <= 0) {
-                    proximoFogo = sorteio(1600, 3000);
-                    explodir();
+                proximoFoguete -= dt * 1000;
+                if (proximoFoguete <= 0) {
+                    proximoFoguete = sorteio(2100, 3600);
+                    lancarFoguete();
                 }
+
+                for (let i = claroes.length - 1; i >= 0; i--) {
+                    claroes[i].t += dt;
+                    if (claroes[i].t > 0.5) claroes.splice(i, 1);
+                }
+
+                for (let i = foguetes.length - 1; i >= 0; i--) {
+                    const f = foguetes[i];
+                    f.y += f.vy * dt;
+                    f.rasto.push([f.x, f.y]);
+                    if (f.rasto.length > 14) f.rasto.shift();
+
+                    if (f.y <= f.alvo) {
+                        rebentar(f.x, f.y, f.cor);
+                        foguetes.splice(i, 1);
+                    }
+                }
+            }
+
+            for (const b of ambiente) {
+                b.x += b.vx * dt;
+                b.y += b.vy * dt;
+                if (b.x < -b.r) b.x = w + b.r;
+                if (b.x > w + b.r) b.x = -b.r;
+                if (b.y < -b.r) b.y = h + b.r;
+                if (b.y > h + b.r) b.y = -b.r;
             }
 
             for (let i = particulas.length - 1; i >= 0; i--) {
@@ -576,86 +973,162 @@
                 switch (nome) {
                     case 'neve':
                         p.y += p.vy * dt;
-                        p.x += Math.sin(p.fase + relogio * 1.1) * 22 * dt;
-                        if (p.y > h + 8) { p.y = -10; p.x = sorteio(-20, w + 20); }
+                        p.x += (Math.sin(relogio * 0.55 + p.fase) * 14 + 7) * dt * p.z;
+                        p.giro += p.vg * dt;
+                        if (p.y > h + 14) {
+                            p.y = -14;
+                            p.x = sorteio(-30, w + 30);
+                        }
                         break;
+
                     case 'morcegos':
                         p.x += p.vx * dt;
-                        if (p.vx > 0 && p.x > w + 80) { p.x = -80; p.y = sorteio(h * .05, h * .55); }
-                        if (p.vx < 0 && p.x < -80) { p.x = w + 80; p.y = sorteio(h * .05, h * .55); }
+                        p.y += Math.sin(relogio * 1.2 + p.fase) * 12 * dt;
+                        if (p.vx > 0 && p.x > w + 90) {
+                            p.x = -90;
+                            p.y = sorteio(h * 0.05, h * 0.55);
+                        }
+                        if (p.vx < 0 && p.x < -90) {
+                            p.x = w + 90;
+                            p.y = sorteio(h * 0.05, h * 0.55);
+                        }
                         break;
+
                     case 'brilhos':
+                        p.x += (p.vx + Math.sin(relogio * 0.5 + p.fase) * 4) * dt;
+                        p.y += p.vy * dt;
+                        if (p.y < -20) p.y = h + 20;
                         break;
+
                     case 'confetes':
                         p.y += p.vy * dt;
-                        p.x += (p.vx + Math.sin(relogio * 1.6 + p.rot) * 30) * dt;
+                        p.x += (p.vx + Math.sin(relogio * 0.9 + p.fase) * 22) * dt;
                         p.rot += p.vr * dt;
-                        if (p.y > h + 20) { p.y = -20; p.x = sorteio(-10, w + 10); }
+                        if (p.y > h + 24) {
+                            p.y = -24;
+                            p.x = sorteio(-10, w + 10);
+                        }
                         break;
+
                     case 'coracoes':
                         p.y += p.vy * dt;
-                        p.x += Math.sin(p.fase + relogio * 1.3) * 26 * dt;
-                        if (p.y < -60) { p.y = h + 40; p.x = sorteio(0, w); }
+                        p.x += Math.sin(relogio * 0.8 + p.fase) * 16 * dt;
+                        if (p.y < -50) {
+                            p.y = h + sorteio(20, 60);
+                            p.x = sorteio(0, w);
+                        }
                         break;
+
                     case 'petalas':
                         p.y += p.vy * dt;
-                        p.x += (p.vx + Math.sin(relogio * 1.4 + p.fase) * 34) * dt;
+                        p.x += (p.vx + Math.sin(relogio * 0.7 + p.fase) * 26) * dt;
                         p.rot += p.vr * dt;
-                        if (p.y > h + 20) { p.y = -20; p.x = sorteio(-10, w + 10); }
+                        if (p.y > h + 24) {
+                            p.y = -24;
+                            p.x = sorteio(-10, w + 10);
+                        }
                         break;
+
                     case 'bolhas':
                         p.y += p.vy * dt;
-                        p.x += Math.sin(p.fase + relogio * 1.1) * 18 * dt;
-                        if (p.y < -40) { p.y = h + 40; p.x = sorteio(0, w); }
+                        p.x += Math.sin(relogio * 0.6 + p.fase) * 14 * dt;
+                        if (p.y < -50) {
+                            p.y = h + sorteio(20, 60);
+                            p.x = sorteio(0, w);
+                        }
                         break;
+
                     case 'folhas':
                         p.y += p.vy * dt;
-                        p.x += (p.vx + Math.sin(relogio * 1.2 + p.fase) * 40) * dt;
+                        p.x += (p.vx + Math.sin(relogio * 0.65 + p.fase) * 32) * dt;
                         p.rot += p.vr * dt;
-                        if (p.y > h + 25) { p.y = -25; p.x = sorteio(-10, w + 10); }
+                        if (p.y > h + 26) {
+                            p.y = -26;
+                            p.x = sorteio(-10, w + 10);
+                        }
                         break;
+
                     case 'fogos':
                         p.x += p.vx * dt;
                         p.y += p.vy * dt;
-                        p.vy += 90 * dt;
-                        p.vx *= 0.988;
-                        p.vy *= 0.988;
+                        p.vy += 105 * dt;
+                        p.vx *= 0.985;
+                        p.vy *= 0.985;
                         p.vida -= dt;
-                        p.a = Math.max(0, p.vida / 1.4);
+                        p.a = Math.max(0, p.vida / p.vidaTotal);
                         if (p.vida <= 0) particulas.splice(i, 1);
                         break;
+
                     default:
                         break;
                 }
             }
         }
 
-        function explodir() {
-            /* Rebentam sempre na faixa de cima, longe dos preços */
-            const x = sorteio(w * .12, w * .88);
-            const y = sorteio(h * .06, h * .28);
-            const cor = CORES_CONFETE[(Math.random() * CORES_CONFETE.length) | 0];
-            const total = Math.round(36 * Math.min(1.5, escala() * 1.2));
-            for (let i = 0; i < total; i++) {
-                const ang = (i / total) * Math.PI * 2 + sorteio(-.08, .08);
-                const vel = sorteio(60, 150) * escala();
-                particulas.push({
-                    x: x, y: y, r: sorteio(1.6, 3.1) * escala(),
-                    vx: Math.cos(ang) * vel, vy: Math.sin(ang) * vel,
-                    cor: cor, a: 1, vida: sorteio(.9, 1.3)
-                });
+        function desenharAmbiente() {
+            for (const b of ambiente) {
+                const sp = sprite('bokeh', b.r, b.cor);
+                ctx.globalAlpha = b.a;
+                ctx.drawImage(sp, b.x - b.r, b.y - b.r, b.r * 2, b.r * 2);
             }
+            ctx.globalAlpha = 1;
+        }
+
+        function desenharFoguetes() {
+            ctx.globalCompositeOperation = 'lighter';
+
+            /* clarão do rebentamento */
+            for (const c of claroes) {
+                const raio = 34 + c.t * 210;
+                const sp = sprite('flash', 90, c.cor);
+                ctx.globalAlpha = Math.max(0, 0.34 * (1 - c.t / 0.5));
+                ctx.drawImage(sp, c.x - raio, c.y - raio, raio * 2, raio * 2);
+            }
+
+            for (const f of foguetes) {
+                for (let i = 1; i < f.rasto.length; i++) {
+                    const [x0, y0] = f.rasto[i - 1];
+                    const [x1, y1] = f.rasto[i];
+                    const t = i / f.rasto.length;
+                    ctx.globalAlpha = t * 0.5;
+                    ctx.strokeStyle = 'rgba(' + f.cor + ',.9)';
+                    ctx.lineWidth = 1.6 * t + 0.6;
+                    ctx.lineCap = 'round';
+                    ctx.beginPath();
+                    ctx.moveTo(x0, y0);
+                    ctx.lineTo(x1, y1);
+                    ctx.stroke();
+                }
+
+                ctx.globalAlpha = 0.95;
+                ctx.fillStyle = '#fff8e6';
+                ctx.beginPath();
+                ctx.arc(f.x, f.y, 2.4, 0, 6.3);
+                ctx.fill();
+            }
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.globalAlpha = 1;
         }
 
         function passo(agora) {
             if (!ligado) return;
-            const dt = Math.min(.05, (agora - ultimo) / 1000);
+
+            const dt = Math.min(0.05, (agora - ultimo) / 1000);
             ultimo = agora;
+
             medir();
             ctx.clearRect(0, 0, w, h);
+
             atualizar(dt);
+            desenharAmbiente();
+
             for (const p of particulas) pintar(p);
+
+            if (nome === 'fogos') desenharFoguetes();
+
             ctx.globalAlpha = 1;
+            ctx.globalCompositeOperation = 'source-over';
+
             requestAnimationFrame(passo);
         }
 
@@ -663,29 +1136,34 @@
         encher();
         requestAnimationFrame((t) => { ultimo = t; passo(t); });
 
-        /* Rajada: usada quando o vídeo muda de slide */
         function rajada() {
             if (!ligado) return;
-            if (nome === 'fogos') { explodir(); return; }
+
+            if (nome === 'fogos') { lancarFoguete(); return; }
+
             if (nome === 'brilhos') {
                 for (const p of particulas) {
-                    p.x = sorteio(0, w);
-                    p.y = sorteio(0, h);
-                    p.r = sorteio(4, 13) * escala();
+                    if (Math.random() < 0.55) {
+                        p.x = sorteio(0, w);
+                        p.y = sorteio(0, h);
+                        p.r = sorteio(7, 18) * escala();
+                    }
                 }
                 return;
             }
-            const extra = Math.round((BASE[nome] || 20) * .5);
-            for (let i = 0; i < extra && particulas.length < 240; i++) {
+
+            const extra = Math.round((BASE[nome] || 20) * 0.55);
+            for (let i = 0; i < extra && particulas.length < 260; i++) {
                 const p = nova(nome, false);
                 if (!p) break;
+
                 if (nome === 'neve' || nome === 'confetes' || nome === 'petalas' || nome === 'folhas') {
-                    p.y = sorteio(-h * .35, -10);
-                    p.vy = (p.vy || 40) * 2;
+                    p.y = sorteio(-h * 0.4, -8);
+                    p.vy *= 1.8;
                 }
                 if (nome === 'coracoes' || nome === 'bolhas') {
-                    p.y = h + sorteio(10, 60);
-                    p.vy = (p.vy || -40) * 2;
+                    p.y = h + sorteio(10, 70);
+                    p.vy *= 1.8;
                 }
                 particulas.push(p);
             }

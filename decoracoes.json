@@ -4,6 +4,70 @@
     "y": 59,
     "largura": 12
   },
-  "decoracoes": [],
-  "versao": "1792853450284"
+  "decoracoes": [
+    {
+      "nome": "Neve",
+      "tipo": "efeito",
+      "efeito": "neve",
+      "ecras": [
+        "video",
+        "preco"
+      ],
+      "sincronizar": true
+    },
+    {
+      "nome": "Luzes de Natal",
+      "tipo": "figura",
+      "figura": "luzes",
+      "x": 0,
+      "y": 0,
+      "largura": 100,
+      "opacidade": 0.95,
+      "ecras": [
+        "video",
+        "preco"
+      ]
+    },
+    {
+      "nome": "Árvore",
+      "tipo": "figura",
+      "figura": "arvore",
+      "x": 0.4,
+      "y": 63,
+      "largura": 6.5,
+      "anim": "balancar",
+      "ecras": [
+        "video",
+        "preco"
+      ]
+    },
+    {
+      "nome": "Presente",
+      "tipo": "figura",
+      "figura": "presente",
+      "x": 84,
+      "y": 91,
+      "largura": 6,
+      "rotacao": 4,
+      "anim": "flutuar",
+      "ecras": [
+        "video",
+        "preco"
+      ]
+    },
+    {
+      "nome": "Estrela",
+      "tipo": "figura",
+      "figura": "estrela",
+      "x": 0.6,
+      "y": 1.5,
+      "largura": 4.5,
+      "anim": "pulsar",
+      "ecras": [
+        "video",
+        "preco"
+      ]
+    }
+  ],
+  "versao": "1792855757886"
 }
