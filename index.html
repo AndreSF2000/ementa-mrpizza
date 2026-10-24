@@ -1,251 +1,619 @@
 <!DOCTYPE html>
 <html lang="pt-PT">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MR. Pizza - TV Display</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="color-scheme" content="dark">
+<title>MR. Pizza — Ecrãs TV</title>
+<style>
+    *, *::before, *::after { box-sizing: border-box; }
 
-        html, body {
-            width: 100%;
-            height: 100%;
-            background-color: #000;
-            overflow: hidden;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            cursor: none;
-            touch-action: none;
-            -webkit-user-select: none;
-            user-select: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-        }
+    html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background: #000;
+        overflow: hidden;
+        position: fixed;
+        inset: 0;
+        cursor: none;
+        touch-action: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        font-family: system-ui, sans-serif;
+    }
 
-        /* O SEGREDO: Vídeo com otimização de nitidez e contraste */
-        #bg-video {
-            position: fixed;
-            top: 0;
-            left: 0;
-            min-width: 100vw;
-            min-height: 100vh;
-            width: 100vw;
-            height: 100vh;
-            object-fit: cover;
-            background-color: #000;
-            z-index: -1;
-            pointer-events: none;
-            /* Otimização de Nitidez */
-            image-rendering: -webkit-optimize-contrast;
-            image-rendering: crisp-edges;
-            /* Aumento de Contraste e Saturação para texto mais nítido */
-            filter: contrast(1.05) saturate(1.1);
-            /* Aceleração de Hardware */
-            transform: translateZ(0);
-            backface-visibility: hidden;
-        }
+    #ecra {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        background: #000;
+    }
 
-        /* Imagem Fallback com Animação de Segurança e Nitidez */
-        #fallback-img {
-            position: fixed;
-            top: 0;
-            left: 0;
-            min-width: 100vw;
-            min-height: 100vh;
-            width: 100vw;
-            height: 100vh;
-            object-fit: cover;
-            background-color: #000;
-            z-index: -1;
-            pointer-events: none;
-            display: none;
-            image-rendering: -webkit-optimize-contrast;
-            image-rendering: crisp-edges;
-            filter: contrast(1.05) saturate(1.1);
-            animation: subtleBlink 2s ease-in-out infinite;
-        }
+    /*
+     * Palco: caixa com a proporção exata do conteúdo.
+     * TV1 (?mode=video) enche o ecrã (cover); TV2 (?mode=price) é sempre
+     * visível por inteiro (contain). As decorações vivem dentro do palco,
+     * por isso ficam sempre alinhadas com a imagem/vídeo.
+     */
+    #palco {
+        position: relative;
+        flex: 0 0 auto;
+        overflow: hidden;
+        background: #000;
+        transform: translateZ(0);
+    }
 
-        @keyframes subtleBlink {
-            0%, 100% { filter: contrast(1.05) saturate(1.1) brightness(1); }
-            50% { filter: contrast(1.05) saturate(1.1) brightness(1.01); }
-        }
+    .media {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: fill;
+        image-rendering: auto;
+        border: 0;
+        outline: 0;
+    }
 
-        /* Loader */
-        .loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: #000;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 100;
-            color: white;
-            transition: opacity 0.3s ease-out;
-        }
+    /* Camada 1 (TV2) — preçário original, sem perdas */
+    #precario { object-fit: fill; }
 
-        .spinner {
-            width: 50px;
-            height: 50px;
-            border: 5px solid rgba(255, 255, 255, 0.3);
-            border-top: 5px solid #fff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 20px;
-        }
+    /* Camada 2 (TV2) — chef animado, com o verde removido */
+    #logotipo {
+        position: absolute;
+        z-index: 2;
+        aspect-ratio: 456 / 418;
+        height: auto;
+        pointer-events: none;
+    }
 
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
+    /* Reserva estática do chef */
+    #logotipo-png {
+        position: absolute;
+        z-index: 2;
+        pointer-events: none;
+    }
+
+    /* Vídeo-fonte do chef: fora do ecrã, mas a descodificar */
+    #fonte-logotipo {
+        position: absolute;
+        left: -20px;
+        top: -20px;
+        width: 2px;
+        height: 2px;
+        opacity: .01;
+        pointer-events: none;
+        z-index: -1;
+    }
+
+    /* Camada 3 — decorações (Halloween, etc.) */
+    .decoracao {
+        position: absolute;
+        z-index: 3;
+        pointer-events: none;
+    }
+
+    .loading-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        background: #000;
+        color: #fff;
+        font: 500 16px/1.3 system-ui, sans-serif;
+        transition: opacity .3s linear;
+    }
+
+    .loading-overlay.oculto { opacity: 0; pointer-events: none; }
+
+    .spinner {
+        width: 46px;
+        height: 46px;
+        border: 4px solid rgba(255, 255, 255, .25);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: girar 1s linear infinite;
+    }
+
+    @keyframes girar { to { transform: rotate(360deg); } }
+
+    #aviso {
+        position: fixed;
+        left: 14px;
+        bottom: 14px;
+        z-index: 99;
+        display: none;
+        padding: 8px 12px;
+        border-radius: 6px;
+        background: rgba(0, 0, 0, .72);
+        color: #fff;
+        font: 500 14px/1.3 system-ui, sans-serif;
+    }
+
+    /* Aviso de atualização */
+    #aviso-atualizacao {
+        position: fixed;
+        inset: 0;
+        z-index: 999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: .35em;
+        background: rgba(0, 0, 0, .82);
+        color: #fff;
+        text-align: center;
+        font: 600 clamp(22px, 2.4vw, 48px)/1.2 system-ui, sans-serif;
+    }
+
+    #aviso-atualizacao p { margin: 0; }
+
+    #aviso-atualizacao #contagem {
+        color: #4ade80;
+        font-size: 1.7em;
+        font-variant-numeric: tabular-nums;
+    }
+</style>
 </head>
 <body>
 
-    <!-- VÍDEO ESTÁTICO NO DOM -->
-    <video id="bg-video" autoplay muted loop playsinline>
-        <source id="video-source" src="" type="video/mp4">
-        O seu navegador não suporta vídeos.
-    </video>
+<div id="ecra">
+    <div id="palco"></div>
+</div>
 
-    <!-- IMAGEM FALLBACK COM ANIMAÇÃO -->
-    <img id="fallback-img" src="" alt="Preçário MR. Pizza">
+<div class="loading-overlay" id="loader">
+    <div class="spinner"></div>
+    <p>A carregar conteúdo…</p>
+</div>
 
-    <!-- LOADER -->
-    <div class="loading-overlay" id="loader">
-        <div class="spinner"></div>
-        <p>A carregar conteúdo...</p>
-    </div>
+<script>
+/* ------------------------------------------------------------------
+   CONFIGURAÇÃO
+   ------------------------------------------------------------------ */
+const VERSAO = '2026-10-25';
 
-    <script>
-        const ASSETS = {
-            video: "https://raw.githubusercontent.com/AndreSF2000/ementa-mrpizza/main/menus-mr-ermesinde-out-2026.mp4",
-            priceVideo: "https://raw.githubusercontent.com/AndreSF2000/ementa-mrpizza/refs/heads/main/precario-video.mp4",
-            price: "https://raw.githubusercontent.com/AndreSF2000/ementa-mrpizza/main/menu-tv-fixo.png"
-        };
+const ASSETS = {
+    menus: 'menus-mr-ermesinde-out-2026.mp4',
+    precario: 'menu-tv-fixo.png',
+    logotipo: 'mrpizza.mp4',
+    logotipoReserva: 'logotipo-chef.png',
+    config: 'decoracoes.json'
+};
 
-        const params = new URLSearchParams(window.location.search);
-        const mode = params.get('mode') || 'video';
+/* Recorte do chef dentro do vídeo (fundo verde) */
+const CORTE = { x: 350, y: 146, l: 456, a: 418 };
 
-        const video = document.getElementById('bg-video');
-        const videoSource = document.getElementById('video-source');
-        const fallbackImg = document.getElementById('fallback-img');
-        const loader = document.getElementById('loader');
+/* Posição por omissão do chef, em percentagem do palco */
+const CHEF_OMISSAO = { x: 6.6, y: 59, largura: 12 };
 
-        function hideLoader() {
-            if (loader && loader.parentNode) {
-                loader.style.opacity = '0';
-                setTimeout(() => {
-                    if (loader.parentNode) loader.remove();
-                }, 300);
-            }
-        }
+/* Atualizações automáticas */
+const INTERVALO_VERIFICACAO = 20000;
+const SEGUNDOS_AVISO = 5;
 
-        function showFallback() {
-            video.style.display = 'none';
-            fallbackImg.src = ASSETS.price;
-            fallbackImg.style.display = 'block';
-            hideLoader();
-        }
+/* ------------------------------------------------------------------ */
 
-        function initDisplay() {
-            if (mode === 'video') {
-                loadVideo(ASSETS.video);
-            } else if (mode === 'price') {
-                loadVideo(ASSETS.priceVideo, true);
-            } else {
-                showError("Modo inválido. Use ?mode=video ou ?mode=price");
-            }
-        }
+const palco = document.getElementById('palco');
+const loader = document.getElementById('loader');
 
-        function loadVideo(src, hasFallback = false) {
-            videoSource.src = src;
-            video.load();
-            
-            let hasStarted = false;
-            
-            const loadTimeout = setTimeout(() => {
-                if (!hasStarted) {
-                    console.error("Timeout: Vídeo não carregou em 8s");
-                    if (hasFallback) {
-                        showFallback();
-                    } else {
-                        showError("Erro ao carregar vídeo. Verifique a internet.");
-                    }
-                }
-            }, 8000);
+let proporcao = 16 / 9;
+let cobrirEcra = false;
+let temporizadores = [];
 
-            const checkInterval = setInterval(() => {
-                if (video.readyState >= 2) {
-                    clearInterval(checkInterval);
-                    if (!hasStarted) {
-                        hasStarted = true;
-                        hideLoader();
-                        video.play().catch(e => console.error("Autoplay falhou", e));
-                    }
-                }
-            }, 500);
+/* Ecrã: ?mode=video (TV1, por omissão) ou ?mode=price (TV2) */
+const MODO = (() => {
+    const p = new URLSearchParams(location.search);
+    const m = (p.get('mode') || p.get('ecra') || p.get('tv') || '').toLowerCase();
+    if (['price', 'precario', 'preço', 'preco', '2', 'tv2'].includes(m)) return 'preco';
+    return 'video';
+})();
 
-            video.addEventListener('canplay', () => {
-                if (!hasStarted) {
-                    hasStarted = true;
-                    hideLoader();
-                    video.play().catch(e => console.error("Autoplay falhou", e));
-                }
-            });
+function comVersao(url) {
+    return url + (url.includes('?') ? '&' : '?') + 'v=' + encodeURIComponent(VERSAO);
+}
 
-            video.addEventListener('loadeddata', () => {
-                if (!hasStarted) {
-                    hasStarted = true;
-                    hideLoader();
-                    video.play().catch(e => console.error("Autoplay falhou", e));
-                }
-            });
+/*
+ * Ajusta o palco ao conteúdo.
+ * cobrir = true  → preenche o ecrã (pode cortar as bordas) — TV1
+ * cobrir = false → cabe todo no ecrã (barras pretas se preciso) — TV2
+ */
+function ajustarPalco(ar, cobrir) {
+    if (!ar || !isFinite(ar) || ar <= 0) ar = 16 / 9;
+    proporcao = ar;
+    cobrirEcra = !!cobrir;
 
-            video.addEventListener('error', () => {
-                console.error("Erro ao carregar vídeo:", src);
-                clearInterval(checkInterval);
-                clearTimeout(loadTimeout);
-                if (hasFallback) {
-                    showFallback();
-                } else {
-                    showError("Erro ao carregar vídeo. Verifique a internet.");
-                }
-            });
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
 
-            video.play().catch(error => {
-                console.log("Autoplay inicial bloqueado, tentando novamente", error);
-                setTimeout(() => video.play().catch(e => console.error("Autoplay falhou", e)), 500);
-            });
-        }
+    let largura = vw;
+    let altura = vw / ar;
 
-        function showError(message) {
-            loader.innerHTML = `
-                <div style="text-align: center;">
-                    <h1 style="font-size: 3rem; margin-bottom: 1rem;">⚠️</h1>
-                    <h2 style="font-size: 1.5rem; margin-bottom: 0.5rem;">${message}</h2>
-                    <p style="font-size: 1rem; opacity: 0.7;">A tentar recarregar automaticamente em 10 segundos...</p>
-                </div>
-            `;
-            loader.style.opacity = '1';
-            loader.style.display = 'flex';
-            setTimeout(() => window.location.reload(), 10000);
-        }
+    if (cobrir) {
+        if (altura < vh) { altura = vh; largura = vh * ar; }
+    } else {
+        if (altura > vh) { altura = vh; largura = vh * ar; }
+    }
 
-        initDisplay();
+    palco.style.width = Math.round(largura) + 'px';
+    palco.style.height = Math.round(altura) + 'px';
+}
 
-        window.addEventListener('resize', () => {
-            if (video && video.paused) video.play().catch(() => {});
+function aviso(mensagem) {
+    let el = document.getElementById('aviso');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'aviso';
+        document.body.appendChild(el);
+    }
+    el.textContent = mensagem;
+    el.style.display = 'block';
+}
+
+function limparAviso() {
+    const el = document.getElementById('aviso');
+    if (el) el.remove();
+}
+
+function esconderLoader() {
+    if (!loader || !loader.parentNode) return;
+    loader.classList.add('oculto');
+    const id = setTimeout(() => { if (loader.parentNode) loader.remove(); }, 400);
+    temporizadores.push(id);
+}
+
+function tocar(video) {
+    const p = video.play();
+    if (p && p.catch) {
+        p.catch(() => {
+            const id = setTimeout(() => video.play().catch(() => {}), 1500);
+            temporizadores.push(id);
         });
-    </script>
+    }
+}
+
+/* Se o vídeo congelar, recarrega sozinho */
+function vigiarVideo(video) {
+    let ultimoTempo = -1;
+    let parado = 0;
+
+    const id = setInterval(() => {
+        if (document.hidden) return;
+        if (video.paused) { tocar(video); return; }
+        if (video.readyState < 3) return;
+
+        if (video.currentTime === ultimoTempo) {
+            if (++parado >= 2) {
+                parado = 0;
+                video.load();
+                tocar(video);
+            }
+        } else {
+            parado = 0;
+            ultimoTempo = video.currentTime;
+        }
+    }, 3000);
+
+    temporizadores.push(id);
+}
+
+/* ------------------------------------------------------------------
+   Decorações (Halloween, Natal, etc.) vêm de decoracoes.json
+   ------------------------------------------------------------------ */
+let cfg = { versao: '', chef: CHEF_OMISSAO, decoracoes: [] };
+
+async function carregarConfig() {
+    try {
+        const resposta = await fetch(ASSETS.config + '?t=' + Date.now(), { cache: 'no-store' });
+        if (!resposta.ok) throw new Error('HTTP ' + resposta.status);
+        const dados = await resposta.json();
+        cfg = {
+            versao: dados.versao || '',
+            chef: Object.assign({}, CHEF_OMISSAO, dados.chef || {}),
+            decoracoes: Array.isArray(dados.decoracoes) ? dados.decoracoes : []
+        };
+    } catch (e) {
+        cfg = { versao: '', chef: CHEF_OMISSAO, decoracoes: [] };
+    }
+}
+
+function desenharDecoracoes() {
+    const alvo = MODO === 'video' ? 'video' : 'preco';
+
+    cfg.decoracoes.forEach((d) => {
+        if (Array.isArray(d.ecras) && d.ecras.length && !d.ecras.includes(alvo)) return;
+        if (!d.ficheiro) return;
+
+        const img = document.createElement('img');
+        img.className = 'decoracao';
+        img.alt = '';
+        img.style.left = (d.x ?? 0) + '%';
+        img.style.top = (d.y ?? 0) + '%';
+        img.style.width = (d.largura ?? 15) + '%';
+        if (d.opacidade != null) img.style.opacity = d.opacidade;
+        if (d.rotacao) img.style.transform = 'rotate(' + d.rotacao + 'deg)';
+
+        const versao = encodeURIComponent(cfg.versao || '1');
+        img.src = d.ficheiro + (d.ficheiro.includes('?') ? '&' : '?') + 'v=' + versao;
+
+        palco.appendChild(img);
+    });
+}
+
+/* ------------------------------------------------------------------
+   TV1 — vídeo dos menus
+   ------------------------------------------------------------------ */
+function ecraVideo() {
+    const video = document.createElement('video');
+    video.id = 'video-menus';
+    video.className = 'media';
+    video.autoplay = true;
+    video.loop = true;
+    video.muted = true;
+    video.defaultMuted = true;
+    video.playsInline = true;
+    video.setAttribute('playsinline', '');
+    video.setAttribute('muted', '');
+    video.preload = 'auto';
+    video.disablePictureInPicture = true;
+    video.src = comVersao(ASSETS.menus);
+
+    let emFalha = false;
+
+    video.addEventListener('loadedmetadata', () => {
+        ajustarPalco(video.videoWidth / video.videoHeight, true);
+    });
+
+    video.addEventListener('playing', () => {
+        esconderLoader();
+        limparAviso();
+    });
+
+    const falhar = () => {
+        if (emFalha) return;
+        emFalha = true;
+        aviso('Vídeo da ementa sem ligação — a tentar novamente…');
+        const id = setTimeout(() => {
+            emFalha = false;
+            video.load();
+            tocar(video);
+        }, 5000);
+        temporizadores.push(id);
+    };
+
+    video.addEventListener('error', falhar);
+
+    const limite = setTimeout(() => { if (video.readyState < 2) falhar(); }, 12000);
+    temporizadores.push(limite);
+
+    palco.appendChild(video);
+    tocar(video);
+    vigiarVideo(video);
+}
+
+/* ------------------------------------------------------------------
+   TV2 — preçário (foto original + chef animado por cima)
+   ------------------------------------------------------------------ */
+function ecraPreco() {
+    const img = new Image();
+    img.id = 'precario';
+    img.className = 'media';
+    img.alt = 'Preçário Mr. Pizza';
+    img.decoding = 'async';
+
+    const carregar = () => { img.src = comVersao(ASSETS.precario); };
+
+    img.addEventListener('load', async () => {
+        ajustarPalco(img.naturalWidth / img.naturalHeight, false);
+        palco.appendChild(img);
+        try { await img.decode(); } catch (e) {}
+
+        limparAviso();
+        esconderLoader();
+        iniciarChef();
+    });
+
+    img.addEventListener('error', () => {
+        aviso('Preçário sem ligação — a tentar novamente…');
+        const id = setTimeout(carregar, 4000);
+        temporizadores.push(id);
+    });
+
+    carregar();
+}
+
+function iniciarChef() {
+    const fonte = document.createElement('video');
+    fonte.id = 'fonte-logotipo';
+    fonte.muted = true;
+    fonte.defaultMuted = true;
+    fonte.loop = true;
+    fonte.autoplay = true;
+    fonte.playsInline = true;
+    fonte.setAttribute('playsinline', '');
+    fonte.setAttribute('muted', '');
+    fonte.preload = 'auto';
+    fonte.src = comVersao(ASSETS.logotipo);
+    document.body.appendChild(fonte);
+    fonte.play().catch(() => {});
+
+    const canvas = document.createElement('canvas');
+    canvas.id = 'logotipo';
+    canvas.width = CORTE.l;
+    canvas.height = CORTE.a;
+    canvas.style.left = cfg.chef.x + '%';
+    canvas.style.top = cfg.chef.y + '%';
+    canvas.style.width = cfg.chef.largura + '%';
+    palco.appendChild(canvas);
+
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    let ultimoTempo = -1;
+    let ultimoPintado = 0;
+    let arrancou = false;
+
+    function desenhar() {
+        requestAnimationFrame(desenhar);
+
+        if (document.hidden || fonte.readyState < 2) return;
+        if (fonte.currentTime === ultimoTempo) return;
+
+        const agora = performance.now();
+        if (agora - ultimoPintado < 66) return;   // ~15 fps
+        ultimoPintado = agora;
+        ultimoTempo = fonte.currentTime;
+
+        ctx.clearRect(0, 0, CORTE.l, CORTE.a);
+        ctx.drawImage(fonte, CORTE.x, CORTE.y, CORTE.l, CORTE.a, 0, 0, CORTE.l, CORTE.a);
+
+        const img = ctx.getImageData(0, 0, CORTE.l, CORTE.a);
+        const d = img.data;
+
+        for (let i = 0; i < d.length; i += 4) {
+            const r = d[i], g = d[i + 1], b = d[i + 2];
+            const verde = g - (r > b ? r : b);
+
+            if (verde > 45) { d[i + 3] = 0; continue; }
+            if (verde > 20) d[i + 3] = (255 * (45 - verde) / 25) | 0;
+
+            const alvo = (r + b) / 2;
+            if (g > alvo) d[i + 1] = alvo | 0;
+        }
+
+        ctx.putImageData(img, 0, 0);
+        arrancou = true;
+    }
+
+    desenhar();
+
+    // Se o vídeo não arrancar em 8 s, mostra o recorte estático
+    const limite = setTimeout(() => {
+        if (arrancou || fonte.readyState >= 2) return;
+        const reserva = document.createElement('img');
+        reserva.id = 'logotipo-png';
+        reserva.alt = '';
+        reserva.style.left = cfg.chef.x + '%';
+        reserva.style.top = cfg.chef.y + '%';
+        reserva.style.width = cfg.chef.largura + '%';
+        reserva.src = comVersao(ASSETS.logotipoReserva);
+        reserva.addEventListener('error', () => reserva.remove());
+        palco.appendChild(reserva);
+    }, 8000);
+    temporizadores.push(limite);
+}
+
+/* ------------------------------------------------------------------
+   Arranque
+   ------------------------------------------------------------------ */
+async function arrancar() {
+    await carregarConfig();
+    ajustarPalco(16 / 9, MODO === 'video');
+
+    if (MODO === 'preco') {
+        ecraPreco();
+    } else {
+        ecraVideo();
+    }
+
+    desenharDecoracoes();
+    iniciarVerificacaoAtualizacoes();
+}
+
+window.addEventListener('resize', () => ajustarPalco(proporcao, cobrirEcra));
+window.addEventListener('DOMContentLoaded', arrancar);
+
+/* Ecrã cheio com um clique no telecomando */
+document.addEventListener('click', async () => {
+    if (!document.fullscreenElement) {
+        try {
+            await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+        } catch (e) {}
+    }
+    const video = palco.querySelector('video.media');
+    if (video && video.paused) tocar(video);
+});
+
+/* Evita que o ecrã suspenda */
+async function manterAcordado() {
+    try {
+        if ('wakeLock' in navigator) await navigator.wakeLock.request('screen');
+    } catch (e) {}
+}
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) manterAcordado();
+});
+manterAcordado();
+
+/* ------------------------------------------------------------------
+   Atualizações automáticas
+   Compara o Last-Modified do HTML e do decoracoes.json. Se mudarem,
+   avisa 5 s e recarrega.
+   ------------------------------------------------------------------ */
+let marcaServidor = null;
+let aAtualizar = false;
+
+async function marcaDe(url) {
+    try {
+        const resposta = await fetch(url + (url.includes('?') ? '&' : '?') + 'ver=' + Date.now(), {
+            method: 'HEAD',
+            cache: 'no-store'
+        });
+        if (!resposta.ok) return null;
+        return resposta.headers.get('last-modified') || resposta.headers.get('etag') || '';
+    } catch (e) {
+        return null;
+    }
+}
+
+async function marcaAtual() {
+    const [html, config] = await Promise.all([
+        marcaDe(location.pathname),
+        marcaDe(ASSETS.config)
+    ]);
+    if (!html && !config) return null;
+    return (html || '') + '|' + (config || '');
+}
+
+function avisarAtualizacao() {
+    if (aAtualizar) return;
+    aAtualizar = true;
+
+    const caixa = document.createElement('div');
+    caixa.id = 'aviso-atualizacao';
+    caixa.innerHTML = '<p>A atualizar…</p><p id="contagem">' + SEGUNDOS_AVISO + '</p>';
+    document.body.appendChild(caixa);
+
+    let restantes = SEGUNDOS_AVISO;
+    const contador = setInterval(() => {
+        restantes--;
+        const numero = document.getElementById('contagem');
+        if (numero) numero.textContent = restantes > 0 ? restantes : '…';
+        if (restantes <= 0) {
+            clearInterval(contador);
+            location.reload();
+        }
+    }, 1000);
+}
+
+async function verificarAtualizacao() {
+    if (aAtualizar) return;
+    const marca = await marcaAtual();
+    if (!marca) return;
+    if (marcaServidor === null) { marcaServidor = marca; return; }
+    if (marca !== marcaServidor) avisarAtualizacao();
+}
+
+function iniciarVerificacaoAtualizacoes() {
+    marcaAtual().then((m) => { marcaServidor = m; });
+    setInterval(verificarAtualizacao, INTERVALO_VERIFICACAO);
+}
+</script>
+
 </body>
 </html>

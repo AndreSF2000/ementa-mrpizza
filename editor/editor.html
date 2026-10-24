@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MR. Pizza — Editor</title>
+<style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    :root {
+        --fundo: #0b0f0c;
+        --painel: #141a15;
+        --linha: #263026;
+        --texto: #e8f0e9;
+        --suave: #9db3a0;
+        --verde: #22c55e;
+        --vermelho: #e2483d;
+    }
+
+    body {
+        margin: 0;
+        background: var(--fundo);
+        color: var(--texto);
+        font: 14px/1.45 system-ui, -apple-system, Segoe UI, sans-serif;
+        height: 100vh;
+        overflow: hidden;
+    }
+
+    header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 10px 16px;
+        background: var(--painel);
+        border-bottom: 1px solid var(--linha);
+        height: 60px;
+    }
+
+    header h1 {
+        font-size: 15px;
+        font-weight: 700;
+        margin: 0;
+        letter-spacing: .02em;
+    }
+
+    header h1 span { color: var(--vermelho); }
+
+    .modos { display: flex; gap: 6px; margin-left: 12px; }
+
+    .modos button {
+        background: transparent;
+        border: 1px solid var(--linha);
+        color: var(--suave);
+        padding: 6px 12px;
+        border-radius: 7px;
+        cursor: pointer;
+        font: inherit;
+    }
+
+    .modos button.ativo {
+        background: #1d2a20;
+        border-color: var(--verde);
+        color: var(--texto);
+    }
+
+    .acoes { margin-left: auto; display: flex; gap: 8px; }
+
+    .acoes button {
+        border: 1px solid var(--linha);
+        background: #1a231b;
+        color: var(--texto);
+        padding: 8px 14px;
+        border-radius: 8px;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 600;
+    }
+
+    .acoes button.primario { background: var(--verde); border-color: var(--verde); color: #04150a; }
+    .acoes button:disabled { opacity: .5; cursor: progress; }
+
+    main {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 330px;
+        gap: 16px;
+        padding: 16px;
+        height: calc(100vh - 60px);
+    }
+
+    .preview {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-width: 0;
+        gap: 10px;
+    }
+
+    #palco {
+        position: relative;
+        width: 100%;
+        max-width: min(100%, calc((100vh - 150px) * 16 / 9));
+        aspect-ratio: 16 / 9;
+        background: #000;
+        overflow: hidden;
+        border-radius: 8px;
+        box-shadow: 0 0 0 1px var(--linha);
+        touch-action: none;
+    }
+
+    #palco video, #palco img.fundo {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: fill;
+        pointer-events: none;
+    }
+
+    .camada {
+        position: absolute;
+        cursor: grab;
+        user-select: none;
+        outline: 0 solid transparent;
+    }
+
+    .camada.selecionada { outline: 2px solid var(--verde); outline-offset: 0; }
+
+    .camada img { display: block; width: 100%; height: auto; pointer-events: none; }
+
+    .camada .pega {
+        position: absolute;
+        right: -7px;
+        bottom: -7px;
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+        background: var(--verde);
+        border: 2px solid #04150a;
+        cursor: nwse-resize;
+        display: none;
+    }
+
+    .camada.selecionada .pega { display: block; }
+
+    .preview p { color: var(--suave); font-size: 12px; margin: 0; }
+
+    aside {
+        background: var(--painel);
+        border: 1px solid var(--linha);
+        border-radius: 10px;
+        padding: 12px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    aside h2 {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: .08em;
+        color: var(--suave);
+        margin: 0;
+    }
+
+    #lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+
+    #lista li {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border-radius: 7px;
+        border: 1px solid transparent;
+        cursor: pointer;
+        background: #101711;
+    }
+
+    #lista li.selecionada { border-color: var(--verde); background: #16231a; }
+
+    #lista li .nome { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #lista li .tipo { color: var(--suave); font-size: 11px; }
+
+    #lista li button {
+        background: transparent;
+        border: 0;
+        color: var(--vermelho);
+        cursor: pointer;
+        font-size: 15px;
+        line-height: 1;
+        padding: 2px 4px;
+    }
+
+    .upload {
+        display: block;
+        text-align: center;
+        padding: 10px;
+        border: 1px dashed var(--linha);
+        border-radius: 8px;
+        cursor: pointer;
+        color: var(--suave);
+    }
+
+    .upload:hover { border-color: var(--verde); color: var(--texto); }
+    .upload input { display: none; }
+
+    #propriedades { display: none; flex-direction: column; gap: 10px; }
+    #propriedades.ativa { display: flex; }
+
+    .campo { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; }
+    .campo label { color: var(--suave); font-size: 12px; }
+
+    .campo input[type="number"] {
+        width: 74px;
+        background: #0d130e;
+        border: 1px solid var(--linha);
+        color: var(--texto);
+        border-radius: 6px;
+        padding: 5px 7px;
+        font: inherit;
+    }
+
+    .campo input[type="range"] { width: 150px; accent-color: var(--verde); }
+
+    .ecras { display: flex; gap: 14px; color: var(--suave); font-size: 12px; }
+    .ecras label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+
+    #estado {
+        border-top: 1px solid var(--linha);
+        padding-top: 10px;
+        font-size: 12px;
+        color: var(--suave);
+        white-space: pre-wrap;
+        max-height: 180px;
+        overflow-y: auto;
+    }
+
+    #estado.ok { color: #7ee2a0; }
+    #estado.erro { color: #ff9a92; }
+</style>
+</head>
+<body>
+
+<header>
+    <h1><span>MR.</span> Pizza — Editor</h1>
+    <div class="modos">
+        <button data-modo="video">TV1 · Menus</button>
+        <button data-modo="preco" class="ativo">TV2 · Preçário</button>
+    </div>
+    <div class="acoes">
+        <button id="guardar">Guardar</button>
+        <button id="publicar" class="primario">Publicar no site</button>
+    </div>
+</header>
+
+<main>
+    <section class="preview">
+        <div id="palco"></div>
+        <p>Arrasta para mover · canto verde para redimensionar · Delete remove</p>
+    </section>
+
+    <aside>
+        <h2>Camadas</h2>
+        <ul id="lista"></ul>
+
+        <label class="upload">
+            Adicionar imagem (PNG com fundo transparente)
+            <input id="ficheiro" type="file" accept="image/png,image/webp,image/gif,image/jpeg">
+        </label>
+
+        <div id="propriedades">
+            <div class="campo"><label>X (%)</label><input type="number" id="pX" step="0.1"></div>
+            <div class="campo"><label>Y (%)</label><input type="number" id="pY" step="0.1"></div>
+            <div class="campo"><label>Largura (%)</label><input type="number" id="pL" step="0.1" min="1" max="100"></div>
+            <div class="campo"><label>Rotação (°)</label><input type="number" id="pR" step="1" min="-180" max="180"></div>
+            <div class="campo"><label>Opacidade</label><input type="range" id="pO" min="0" max="1" step="0.05"></div>
+            <div class="ecras">
+                <label><input type="checkbox" id="eTV1" checked> TV1</label>
+                <label><input type="checkbox" id="eTV2" checked> TV2</label>
+            </div>
+        </div>
+
+        <div id="estado">Pronto.</div>
+    </aside>
+</main>
+
+<script>
+const API = {
+    carregar: '/api/carregar',
+    guardar: '/api/guardar',
+    publicar: '/api/publicar'
+};
+
+const palco = document.getElementById('palco');
+const lista = document.getElementById('lista');
+const propriedades = document.getElementById('propriedades');
+const estadoEl = document.getElementById('estado');
+
+const pX = document.getElementById('pX');
+const pY = document.getElementById('pY');
+const pL = document.getElementById('pL');
+const pR = document.getElementById('pR');
+const pO = document.getElementById('pO');
+const eTV1 = document.getElementById('eTV1');
+const eTV2 = document.getElementById('eTV2');
+
+let modo = 'preco';
+let dados = { chef: { x: 6.6, y: 59, largura: 12 }, decoracoes: [] };
+let selecionada = null;            // { tipo: 'chef'|'decor', indice }
+let elementos = new Map();         // chave -> elemento DOM
+
+function chave(tipo, indice) { return tipo + ':' + indice; }
+
+function estado(texto, classe) {
+    estadoEl.textContent = texto;
+    estadoEl.className = classe || '';
+}
+
+/* ---------------- Desenho ---------------- */
+
+function fundoDoEcra() {
+    const frag = document.createDocumentFragment();
+
+    if (modo === 'video') {
+        const video = document.createElement('video');
+        video.muted = true;
+        video.loop = true;
+        video.autoplay = true;
+        video.playsInline = true;
+        video.className = 'fundo';
+        video.src = 'menus-mr-ermesinde-out-2026.mp4';
+        video.addEventListener('error', () => {
+            // fallback: o vídeo que está online
+            if (!video.dataset.fallback) {
+                video.dataset.fallback = '1';
+                video.src = 'https://andresf2000.github.io/ementa-mrpizza/menus-mr-ermesinde-out-2026.mp4';
+                video.play().catch(() => {});
+            }
+        });
+        video.play().catch(() => {});
+        frag.appendChild(video);
+    } else {
+        const img = document.createElement('img');
+        img.className = 'fundo';
+        img.alt = '';
+        img.src = 'menu-tv-fixo.png';
+        frag.appendChild(img);
+    }
+
+    return frag;
+}
+
+function render() {
+    palco.innerHTML = '';
+    elementos = new Map();
+
+    palco.appendChild(fundoDoEcra());
+
+    // chef (só na TV2)
+    if (modo === 'preco') {
+        const el = camadaChef();
+        palco.appendChild(el);
+    }
+
+    dados.decoracoes.forEach((d, i) => {
+        const el = camadaDecoracao(d, i);
+        palco.appendChild(el);
+    });
+
+    renderLista();
+    aplicarSelecao();
+    aplicarPosicoes();
+}
+
+function criarCamada(tipo, indice, chaveSrc) {
+    const el = document.createElement('div');
+    el.className = 'camada';
+    el.dataset.chave = chaveSrc;
+
+    const img = document.createElement('img');
+    img.alt = '';
+    img.src = chaveSrc === 'chef'
+        ? 'logotipo-chef.png'
+        : (dados.decoracoes[indice].ficheiro + '?v=' + (dados.versao || '1'));
+
+    const pega = document.createElement('div');
+    pega.className = 'pega';
+
+    el.appendChild(img);
+    el.appendChild(pega);
+
+    el.addEventListener('pointerdown', (e) => {
+        if (e.target === pega) return;
+        selecionar(tipo, indice);
+        arrastar(e, tipo, indice);
+    });
+
+    pega.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        selecionar(tipo, indice);
+        redimensionar(e, tipo, indice);
+    });
+
+    elementos.set(chaveSrc, el);
+    return el;
+}
+
+function camadaChef() {
+    const el = criarCamada('chef', -1, 'chef');
+    el.title = 'Chef animado (na TV aparece com movimento)';
+    return el;
+}
+
+function camadaDecoracao(d, i) {
+    return criarCamada('decor', i, chave('decor', i));
+}
+
+function objetoDe(tipo, indice) {
+    return tipo === 'chef' ? dados.chef : dados.decoracoes[indice];
+}
+
+function aplicarPosicoes() {
+    elementos.forEach((el, chaveEl) => {
+        const [tipo, i] = chaveEl.split(':');
+        const obj = objetoDe(tipo, Number(i));
+        if (!obj) return;
+        el.style.left = obj.x + '%';
+        el.style.top = obj.y + '%';
+        el.style.width = obj.largura + '%';
+        if (tipo === 'decor') {
+            el.style.opacity = obj.opacidade == null ? 1 : obj.opacidade;
+            el.style.transform = obj.rotacao ? 'rotate(' + obj.rotacao + 'deg)' : '';
+        }
+    });
+}
+
+/* ---------------- Lista lateral ---------------- */
+
+function renderLista() {
+    lista.innerHTML = '';
+
+    if (modo === 'preco') {
+        const li = document.createElement('li');
+        li.innerHTML = '<span class="nome">Chef animado</span><span class="tipo">TV2</span>';
+        li.addEventListener('click', () => selecionar('chef', -1));
+        if (selecionada && selecionada.tipo === 'chef') li.classList.add('selecionada');
+        lista.appendChild(li);
+    }
+
+    dados.decoracoes.forEach((d, i) => {
+        const li = document.createElement('li');
+        const nome = d.nome || d.ficheiro.split('/').pop();
+        const ecras = Array.isArray(d.ecras) && d.ecras.length === 1
+            ? (d.ecras[0] === 'video' ? 'TV1' : 'TV2')
+            : 'TV1+TV2';
+        li.innerHTML = '<span class="nome"></span><span class="tipo"></span>';
+        li.querySelector('.nome').textContent = nome;
+        li.querySelector('.tipo').textContent = ecras;
+
+        const apagar = document.createElement('button');
+        apagar.textContent = '×';
+        apagar.title = 'Remover';
+        apagar.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dados.decoracoes.splice(i, 1);
+            selecionada = null;
+            render();
+        });
+        li.appendChild(apagar);
+
+        li.addEventListener('click', () => selecionar('decor', i));
+        if (selecionada && selecionada.tipo === 'decor' && selecionada.indice === i) {
+            li.classList.add('selecionada');
+        }
+        lista.appendChild(li);
+    });
+}
+
+function selecionar(tipo, indice) {
+    selecionada = { tipo, indice };
+    aplicarSelecao();
+    renderLista();
+    preencherPropriedades();
+}
+
+function aplicarSelecao() {
+    elementos.forEach((el, chaveEl) => {
+        el.classList.toggle('selecionada', !!selecionada && chaveEl === chave(selecionada.tipo, selecionada.indice));
+    });
+}
+
+function preencherPropriedades() {
+    if (!selecionada) {
+        propriedades.classList.remove('ativa');
+        return;
+    }
+
+    const obj = objetoDe(selecionada.tipo, selecionada.indice);
+    if (!obj) { selecionada = null; propriedades.classList.remove('ativa'); return; }
+
+    propriedades.classList.add('ativa');
+    pX.value = obj.x;
+    pY.value = obj.y;
+    pL.value = obj.largura;
+    pR.value = obj.rotacao || 0;
+    pO.value = obj.opacidade == null ? 1 : obj.opacidade;
+
+    const semEcrã = !Array.isArray(obj.ecras) || obj.ecras.length === 0;
+    eTV1.checked = semEcrã || obj.ecras.includes('video');
+    eTV2.checked = semEcrã || obj.ecras.includes('preco');
+
+    const ehChef = selecionada.tipo === 'chef';
+    eTV1.disabled = ehChef;
+    eTV2.disabled = ehChef;
+    pR.disabled = ehChef;
+    pO.disabled = ehChef;
+}
+
+/* ---------------- Interação ---------------- */
+
+function arrastar(evento, tipo, indice) {
+    evento.preventDefault();
+    const rect = palco.getBoundingClientRect();
+    const obj = objetoDe(tipo, indice);
+    const inicioX = evento.clientX;
+    const inicioY = evento.clientY;
+    const x0 = obj.x;
+    const y0 = obj.y;
+
+    function mover(e) {
+        obj.x = Math.round((x0 + (e.clientX - inicioX) / rect.width * 100) * 10) / 10;
+        obj.y = Math.round((y0 + (e.clientY - inicioY) / rect.height * 100) * 10) / 10;
+        aplicarPosicoes();
+        preencherPropriedades();
+    }
+
+    function soltar() {
+        window.removeEventListener('pointermove', mover);
+        window.removeEventListener('pointerup', soltar);
+    }
+
+    window.addEventListener('pointermove', mover);
+    window.addEventListener('pointerup', soltar);
+}
+
+function redimensionar(evento, tipo, indice) {
+    evento.preventDefault();
+    evento.stopPropagation();
+
+    const rect = palco.getBoundingClientRect();
+    const obj = objetoDe(tipo, indice);
+    const esquerda = rect.left + (obj.x / 100) * rect.width;
+
+    function mover(e) {
+        const largura = (e.clientX - esquerda) / rect.width * 100;
+        obj.largura = Math.max(1, Math.min(100, Math.round(largura * 10) / 10));
+        aplicarPosicoes();
+        preencherPropriedades();
+    }
+
+    function soltar() {
+        window.removeEventListener('pointermove', mover);
+        window.removeEventListener('pointerup', soltar);
+    }
+
+    window.addEventListener('pointermove', mover);
+    window.addEventListener('pointerup', soltar);
+}
+
+/* Campos numéricos */
+function campoNumerico(input, aplicar) {
+    input.addEventListener('input', () => {
+        if (!selecionada) return;
+        const obj = objetoDe(selecionada.tipo, selecionada.indice);
+        if (!obj) return;
+        const valor = parseFloat(input.value);
+        if (!isFinite(valor)) return;
+        aplicar(obj, valor);
+        aplicarPosicoes();
+    });
+}
+
+campoNumerico(pX, (o, v) => { o.x = v; });
+campoNumerico(pY, (o, v) => { o.y = v; });
+campoNumerico(pL, (o, v) => { o.largura = Math.max(1, Math.min(100, v)); });
+campoNumerico(pR, (o, v) => { o.rotacao = v; });
+
+pO.addEventListener('input', () => {
+    if (!selecionada) return;
+    const obj = objetoDe(selecionada.tipo, selecionada.indice);
+    if (obj) { obj.opacidade = parseFloat(pO.value); aplicarPosicoes(); }
+});
+
+function atualizarEcras() {
+    if (!selecionada || selecionada.tipo !== 'decor') return;
+    const obj = objetoDe('decor', selecionada.indice);
+    if (!obj) return;
+    const ecras = [];
+    if (eTV1.checked) ecras.push('video');
+    if (eTV2.checked) ecras.push('preco');
+    obj.ecras = ecras;
+    renderLista();
+}
+
+eTV1.addEventListener('change', atualizarEcras);
+eTV2.addEventListener('change', atualizarEcras);
+
+document.addEventListener('keydown', (e) => {
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selecionada && selecionada.tipo === 'decor') {
+        dados.decoracoes.splice(selecionada.indice, 1);
+        selecionada = null;
+        render();
+    }
+});
+
+/* ---------------- Upload ---------------- */
+
+document.getElementById('ficheiro').addEventListener('change', async (e) => {
+    const ficheiro = e.target.files && e.target.files[0];
+    if (!ficheiro) return;
+
+    estado('A enviar ' + ficheiro.name + '…');
+
+    try {
+        const resposta = await fetch(API.carregar, {
+            method: 'POST',
+            headers: { 'X-Nome': ficheiro.name },
+            body: ficheiro
+        });
+        const resultado = await resposta.json();
+        if (!resultado.ok) throw new Error(resultado.erro || 'Falhou');
+
+        dados.decoracoes.push({
+            nome: ficheiro.name.replace(/\.[^.]+$/, ''),
+            ficheiro: resultado.ficheiro,
+            x: 10,
+            y: 10,
+            largura: 15,
+            opacidade: 1,
+            rotacao: 0,
+            ecras: ['video', 'preco']
+        });
+
+        selecionada = { tipo: 'decor', indice: dados.decoracoes.length - 1 };
+        render();
+        estado('Imagem adicionada: ' + resultado.ficheiro + '\nAjusta a posição e carrega em Guardar.', 'ok');
+    } catch (erro) {
+        estado('Erro ao enviar a imagem: ' + erro.message, 'erro');
+    }
+
+    e.target.value = '';
+});
+
+/* ---------------- Guardar / Publicar ---------------- */
+
+async function guardar() {
+    const corpo = {
+        chef: dados.chef,
+        decoracoes: dados.decoracoes
+    };
+
+    const resposta = await fetch(API.guardar, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(corpo)
+    });
+
+    const resultado = await resposta.json();
+    if (!resultado.ok) throw new Error(resultado.erro || 'Falhou ao guardar');
+
+    dados.versao = resultado.versao;
+    return resultado;
+}
+
+document.getElementById('guardar').addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    estado('A guardar…');
+    try {
+        await guardar();
+        estado('Guardado. Ainda não está no site — falta Publicar.', 'ok');
+    } catch (erro) {
+        estado('Erro ao guardar: ' + erro.message, 'erro');
+    }
+    e.target.disabled = false;
+});
+
+document.getElementById('publicar').addEventListener('click', async (e) => {
+    const botao = e.target;
+    botao.disabled = true;
+
+    try {
+        estado('A guardar…');
+        await guardar();
+
+        estado('A publicar no GitHub… (pode levar alguns segundos)');
+        const resposta = await fetch(API.publicar, { method: 'POST' });
+        const resultado = await resposta.json();
+
+        estado((resultado.log || []).join('\n'), resultado.ok ? 'ok' : 'erro');
+    } catch (erro) {
+        estado('Erro ao publicar: ' + erro.message, 'erro');
+    }
+
+    botao.disabled = false;
+});
+
+/* ---------------- Modos ---------------- */
+
+document.querySelectorAll('.modos button').forEach((botao) => {
+    botao.addEventListener('click', () => {
+        document.querySelectorAll('.modos button').forEach((b) => b.classList.remove('ativo'));
+        botao.classList.add('ativo');
+        modo = botao.dataset.modo;
+        selecionada = null;
+        render();
+    });
+});
+
+/* ---------------- Arranque ---------------- */
+
+(async () => {
+    try {
+        const resposta = await fetch('decoracoes.json?t=' + Date.now(), { cache: 'no-store' });
+        if (resposta.ok) {
+            const json = await resposta.json();
+            dados = {
+                versao: json.versao || '',
+                chef: Object.assign({ x: 6.6, y: 59, largura: 12 }, json.chef || {}),
+                decoracoes: Array.isArray(json.decoracoes) ? json.decoracoes : []
+            };
+        }
+    } catch (e) {
+        // sem config: começa vazio
+    }
+
+    render();
+    estado('Pronto. Arrasta as camadas e carrega em Publicar quando estiver bem.');
+})();
+</script>
+
+</body>
+</html>
