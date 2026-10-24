@@ -152,7 +152,11 @@
       btn.disabled = false;
     }
 
-    btn.addEventListener('click', forcar);
+    btn.addEventListener('click', () => {
+      if (confirm('Tens a certeza que queres forçar a atualização de TODAS as TVs agora?')) {
+        forcar();
+      }
+    });
   </script>
 </body>
 
