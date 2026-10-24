@@ -658,6 +658,33 @@ async function arrancar() {
     iniciarVerificacaoAtualizacoes();
 }
 
+/* ------------------------------------------------------------------
+   FORÇAR ATUALIZAÇÃO REMOTA
+   ------------------------------------------------------------------ */
+let versaoForcadaAtual = localStorage.getItem('mrpizza_forcar_v') || '0';
+const URL_FORCAR = './forcar.json';
+
+async function verificarForcar() {
+    try {
+        const res = await fetch(URL_FORCAR + '?t=' + Date.now(), { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const nova = String(data.versao || 0);
+        if (versaoForcadaAtual === '0') {
+            versaoForcadaAtual = nova;
+            localStorage.setItem('mrpizza_forcar_v', nova);
+            return;
+        }
+        if (nova !== versaoForcadaAtual) {
+            localStorage.setItem('mrpizza_forcar_v', nova);
+            setTimeout(() => location.reload(), 300);
+        }
+    } catch (e) {}
+}
+
+setInterval(verificarForcar, 10000);
+verificarForcar();
+
 window.addEventListener('resize', () => ajustarPalco(proporcao, cobrirEcra));
 window.addEventListener('DOMContentLoaded', arrancar);
 

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MR.Pizza - Forçar Atualização</title>
+  <style>
+    :root {
+      --bg: #0b0f0c;
+      --card: #141a15;
+      --linha: #263026;
+      --texto: #e8f0e9;
+      --suave: #9db3a0;
+      --verde: #22c55e;
+      --vermelho: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: system-ui, sans-serif
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--texto);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100dvh
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--linha);
+      border-radius: 12px;
+      padding: 32px;
+      text-align: center;
+      max-width: 380px;
+      width: 90%
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 20px
+    }
+
+    p {
+      margin: 0 0 24px;
+      color: var(--suave)
+    }
+
+    button {
+      border: 0;
+      background: var(--verde);
+      color: #04150a;
+      font-weight: 700;
+      padding: 14px 24px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 16px
+    }
+
+    button:disabled {
+      opacity: .5;
+      cursor: not-allowed
+    }
+
+    button.erro {
+      background: var(--vermelho);
+      color: #fff
+    }
+
+    #estado {
+      margin-top: 18px;
+      font-size: 14px;
+      color: var(--suave);
+      min-height: 20px
+    }
+  </style>
+</head>
+
+<body>
+  <div class="card">
+    <h1>Forçar atualização das TVs</h1>
+    <p>Clica no botão para recarregar todos os ecrãs ligados ao mesmo tempo</p>
+    <button id="forcar">FORÇAR ATUALIZAÇÃO AGORA</button>
+    <div id="estado"></div>
+  </div>
+
+  <script>
+    const OWNER = "AndreSF2000";
+    const REPO = "ementa-mrpizza";
+    const FILE = "forcar.json";
+    const BRANCH = "main";
+
+    const btn = document.getElementById('forcar');
+    const estado = document.getElementById('estado');
+
+    async function forcar() {
+      let token = localStorage.getItem('gh_pat') || '';
+      if (!token) {
+        token = prompt('GitHub Personal Access Token (fine-grained com permissão "Contents: Read and write"):');
+        if (!token) return;
+        localStorage.setItem('gh_pat', token.trim());
+      }
+
+      btn.disabled = true;
+      estado.textContent = 'A gerar novo sinal...';
+
+      try {
+        const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${FILE}`;
+        const getRes = await fetch(url + '?ref=' + BRANCH);
+        if (!getRes.ok) throw new Error('Não foi possível ler o forcar.json');
+        const file = await getRes.json();
+
+        const atual = JSON.parse(atob(file.content));
+        const novo = { versao: Date.now() };
+
+        const putRes = await fetch(url, {
+          method: 'PUT',
+          headers: {
+            'Authorization': 'Bearer ' + token.trim(),
+            'Accept': 'application/vnd.github+json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            message: 'Forçar atualização das TVs',
+            content: btoa(unescape(encodeURIComponent(JSON.stringify(novo, null, 2) + '\n'))),
+            sha: file.sha,
+            branch: BRANCH
+          })
+        });
+
+        const putJson = await putRes.json();
+        if (!putRes.ok) {
+          if (putRes.status === 401 || putRes.status === 403) {
+            localStorage.removeItem('gh_pat');
+          }
+          throw new Error(putJson.message || 'Erro ao atualizar');
+        }
+
+        estado.textContent = 'Feito! As TVs vão recarregar nos próximos 10 segundos.';
+        setTimeout(() => { estado.textContent = ''; }, 5000);
+      } catch (e) {
+        estado.textContent = e.message;
+        btn.classList.add('erro');
+        setTimeout(() => btn.classList.remove('erro'), 1500);
+      }
+
+      btn.disabled = false;
+    }
+
+    btn.addEventListener('click', forcar);
+  </script>
+</body>
+
+</html>
