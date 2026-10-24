@@ -1182,13 +1182,18 @@
         halloween: {
             nome: 'Halloween',
             icone: '🎃',
-            descricao: 'Abóboras, morcegos e teia no canto',
+            descricao: 'Logo assustador, teias, morcegos e abóboras',
             camadas: [
                 { nome: 'Morcegos a voar', tipo: 'efeito', efeito: 'morcegos', ecras: ['video', 'preco'], sincronizar: true },
                 { nome: 'Teia', tipo: 'figura', figura: 'teia', x: 0, y: 0, largura: 13, opacidade: .5, ecras: ['video', 'preco'] },
+                { nome: 'Teia canto', tipo: 'figura', figura: 'teia', x: 87, y: 0, largura: 14, opacidade: .45, rotacao: 90, ecras: ['video', 'preco'] },
+                { nome: 'Teia ao logo', tipo: 'figura', figura: 'teia', x: 2, y: 52, largura: 9, opacidade: .6, rotacao: -25, ecras: ['video', 'preco'] },
+                { nome: 'Morcego logo', tipo: 'figura', figura: 'morcego', x: 16, y: 54, largura: 4.5, anim: 'flutuar', opacidade: .95, ecras: ['video', 'preco'] },
+                { nome: 'Morcego logo 2', tipo: 'figura', figura: 'morcego', x: 5, y: 49, largura: 3.8, anim: 'flutuar', opacidade: .9, ecras: ['video', 'preco'] },
+                { nome: 'Fantasma', tipo: 'figura', figura: 'fantasma', x: 14, y: 48, largura: 5, anim: 'flutuar', opacidade: .95, ecras: ['video', 'preco'] },
                 { nome: 'Abóbora', tipo: 'figura', figura: 'abobora', x: 0.4, y: 88.5, largura: 8, rotacao: -8, anim: 'flutuar', ecras: ['video', 'preco'] },
                 { nome: 'Abóbora pequena', tipo: 'figura', figura: 'abobora', x: 93, y: 1.2, largura: 6, rotacao: 10, anim: 'flutuar', ecras: ['video', 'preco'] },
-                { nome: 'Fantasma', tipo: 'figura', figura: 'fantasma', x: 20, y: 0.5, largura: 5.5, anim: 'flutuar', opacidade: .95, ecras: ['video', 'preco'] }
+                { nome: 'Abóbora ao logo', tipo: 'figura', figura: 'abobora', x: 1.2, y: 72, largura: 6.5, rotacao: -12, anim: 'flutuar', ecras: ['video', 'preco'] }
             ]
         },
 
