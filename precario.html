@@ -151,7 +151,7 @@ const ASSETS = {
 };
 
 // Muda quando substituíres algum ficheiro (força o browser a ir buscá-lo)
-const VERSAO = '2026-10-24d';
+const VERSAO = '2026-10-24e';
 
 /* ------------------------------------------------------------------ */
 
@@ -356,7 +356,12 @@ async function marcaDoServidor() {
             cache: 'no-store'
         });
         if (!resposta.ok) return null;
-        return (resposta.headers.get('etag') || '') + '|' + (resposta.headers.get('last-modified') || '');
+
+        // Last-Modified é estável entre pedidos; o ETag pode variar de formato
+        // conforme o servidor/CDN e provocar recargas desnecessárias.
+        const modificado = resposta.headers.get('last-modified');
+        if (modificado) return modificado;
+        return resposta.headers.get('etag') || '';
     } catch (e) {
         return null; // sem rede: ignora e tenta na próxima
     }
