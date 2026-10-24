@@ -14,8 +14,14 @@ if errorlevel 1 (
 rem Se o servidor ja estiver a correr, apenas abre o browser.
 netstat -ano | findstr /r /c:"127.0.0.1:8099 .*LISTENING" >nul 2>nul
 if errorlevel 1 (
-    start "Editor MR Pizza" /min cmd /c "node ""%~dp0editor\servidor.js"""
-    timeout /t 2 /nobreak >nul
+    echo A iniciar servidor do editor...
+    start "Editor MR Pizza" cmd /k "cd /d "%~dp0" && node editor\servidor.js && pause"
+    timeout /t 4 /nobreak >nul
 )
 
+echo A abrir editor em http://127.0.0.1:8099
 start "" "http://127.0.0.1:8099"
+timeout /t 2 /nobreak >nul
+
+
+
