@@ -104,6 +104,30 @@
         color: #fff;
         font: 500 14px/1.3 system-ui, sans-serif;
     }
+
+    /* Aviso de atualização: aparece quando o ficheiro muda no GitHub */
+    #aviso-atualizacao {
+        position: fixed;
+        inset: 0;
+        z-index: 999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: .35em;
+        background: rgba(0, 0, 0, .82);
+        color: #fff;
+        text-align: center;
+        font: 600 clamp(22px, 2.4vw, 48px)/1.2 system-ui, sans-serif;
+    }
+
+    #aviso-atualizacao p { margin: 0; }
+
+    #aviso-atualizacao #contagem {
+        color: #4ade80;
+        font-size: 1.7em;
+        font-variant-numeric: tabular-nums;
+    }
 </style>
 </head>
 <body>
@@ -127,7 +151,7 @@ const ASSETS = {
 };
 
 // Muda quando substituíres algum ficheiro (força o browser a ir buscá-lo)
-const VERSAO = '2026-10-24c';
+const VERSAO = '2026-10-24d';
 
 /* ------------------------------------------------------------------ */
 
@@ -312,6 +336,70 @@ document.addEventListener('visibilitychange', () => {
     if (!document.hidden) manterAcordado();
 });
 manterAcordado();
+
+/* ------------------------------------------------------------------
+   Atualizações automáticas
+   A página verifica de vez em quando se o ficheiro no GitHub mudou.
+   Se mudou, mostra o aviso 5 s e recarrega com a versão nova.
+   ------------------------------------------------------------------ */
+const INTERVALO_VERIFICACAO = 20000; // 20 s
+const SEGUNDOS_AVISO = 5;
+
+let marcaServidor = null;
+let aAtualizar = false;
+
+async function marcaDoServidor() {
+    try {
+        // HEAD com cache desligada: não descarrega a página, só lê os cabeçalhos
+        const resposta = await fetch(location.pathname + '?ver=' + Date.now(), {
+            method: 'HEAD',
+            cache: 'no-store'
+        });
+        if (!resposta.ok) return null;
+        return (resposta.headers.get('etag') || '') + '|' + (resposta.headers.get('last-modified') || '');
+    } catch (e) {
+        return null; // sem rede: ignora e tenta na próxima
+    }
+}
+
+function avisarAtualizacao() {
+    if (aAtualizar) return;
+    aAtualizar = true;
+
+    const caixa = document.createElement('div');
+    caixa.id = 'aviso-atualizacao';
+    caixa.innerHTML = '<p>A atualizar o preçário…</p><p id="contagem">' + SEGUNDOS_AVISO + '</p>';
+    document.body.appendChild(caixa);
+
+    let restantes = SEGUNDOS_AVISO;
+    const contador = setInterval(() => {
+        restantes--;
+        const numero = document.getElementById('contagem');
+        if (numero) numero.textContent = restantes > 0 ? restantes : '…';
+        if (restantes <= 0) {
+            clearInterval(contador);
+            location.reload();
+        }
+    }, 1000);
+}
+
+async function verificarAtualizacao() {
+    if (aAtualizar || document.hidden) return;
+
+    const marca = await marcaDoServidor();
+    if (!marca) return;
+
+    if (marcaServidor === null) {
+        marcaServidor = marca;
+        return;
+    }
+    if (marca !== marcaServidor) avisarAtualizacao();
+}
+
+(async () => {
+    marcaServidor = await marcaDoServidor();
+    setInterval(verificarAtualizacao, INTERVALO_VERIFICACAO);
+})();
 </script>
 
 </body>
