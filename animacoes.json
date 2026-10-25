@@ -6,7 +6,7 @@
     "duracao": 0.6,
     "logoInicial": 2.5,
     "esperaLogo": 2.5,
-    "voltarLogo": true
+    "voltarLogo": false
   },
   "clips": [
     {
@@ -34,7 +34,7 @@
       "miniatura": "animacoes/3-vampiro.png",
       "duracao": 3.9,
       "ativo": false,
-      "natural": 3.87
+      "natural": 3.9
     },
     {
       "id": "4-capa",
@@ -55,5 +55,5 @@
       "natural": 1.8
     }
   ],
-  "versao": "1792941330545"
+  "versao": "1792942566767"
 }
