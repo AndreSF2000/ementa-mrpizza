@@ -16,7 +16,8 @@
       "miniatura": "animacoes/1-balanco.png",
       "duracao": 2.8,
       "ativo": true,
-      "natural": 2.8
+      "natural": 2.8,
+      "tema": "halloween"
     },
     {
       "id": "2-olhos",
@@ -25,7 +26,8 @@
       "miniatura": "animacoes/2-olhos.png",
       "duracao": 2.83,
       "ativo": false,
-      "natural": 2.83
+      "natural": 2.83,
+      "tema": "halloween"
     },
     {
       "id": "3-vampiro",
@@ -34,7 +36,8 @@
       "miniatura": "animacoes/3-vampiro.png",
       "duracao": 3.9,
       "ativo": false,
-      "natural": 3.9
+      "natural": 3.9,
+      "tema": "halloween"
     },
     {
       "id": "4-capa",
@@ -43,7 +46,8 @@
       "miniatura": "animacoes/4-capa.png",
       "duracao": 2.83,
       "ativo": false,
-      "natural": 2.83
+      "natural": 2.83,
+      "tema": "halloween"
     },
     {
       "id": "5-final",
@@ -52,8 +56,9 @@
       "miniatura": "animacoes/5-final.png",
       "duracao": 1.8,
       "ativo": false,
-      "natural": 1.8
+      "natural": 1.8,
+      "tema": "halloween"
     }
   ],
-  "versao": "1792946625723"
+  "versao": "1792946979961"
 }

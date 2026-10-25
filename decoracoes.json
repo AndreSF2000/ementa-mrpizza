@@ -1,64 +1,9 @@
 {
   "chef": {
-    "x": 6.6,
-    "y": 59,
+    "x": 6.5,
+    "y": 56.9,
     "largura": 12
   },
-  "decoracoes": [
-    {
-      "nome": "Teia",
-      "tipo": "figura",
-      "figura": "teia",
-      "x": 0,
-      "y": 0,
-      "largura": 13,
-      "opacidade": 0.5,
-      "ecras": [
-        "video",
-        "preco"
-      ]
-    },
-    {
-      "nome": "Abóbora",
-      "tipo": "figura",
-      "figura": "abobora",
-      "x": 1.1,
-      "y": 85.6,
-      "largura": 8,
-      "rotacao": -8,
-      "anim": "flutuar",
-      "ecras": [
-        "video",
-        "preco"
-      ]
-    },
-    {
-      "nome": "Abóbora pequena",
-      "tipo": "figura",
-      "figura": "abobora",
-      "x": 94,
-      "y": -2.1,
-      "largura": 6,
-      "rotacao": 10,
-      "anim": "flutuar",
-      "ecras": [
-        "preco"
-      ]
-    },
-    {
-      "nome": "Fantasma",
-      "tipo": "figura",
-      "figura": "fantasma",
-      "x": 20,
-      "y": 0.5,
-      "largura": 5.5,
-      "anim": "flutuar",
-      "opacidade": 0.95,
-      "ecras": [
-        "video",
-        "preco"
-      ]
-    }
-  ],
-  "versao": "1792946625723"
+  "decoracoes": [],
+  "versao": "1792946979961"
 }
