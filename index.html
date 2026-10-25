@@ -224,7 +224,11 @@ const ASSETS = {
     logotipo: 'mrpizza.mp4',
     logotipoReserva: 'logotipo-chef.png',
     config: 'decoracoes.json',
-    efeitos: 'efeitos.js'
+    efeitos: 'efeitos.js',
+    logotipoHalloween: [
+        'halloween-vampire.mp4',
+        'halloween-morph.mp4'
+    ]
 };
 
 /* Recorte do chef dentro do vídeo (fundo verde) */
@@ -573,7 +577,20 @@ function iniciarChef() {
     fonte.setAttribute('playsinline', '');
     fonte.setAttribute('muted', '');
     fonte.preload = 'auto';
-    fonte.src = comVersao(ASSETS.logotipo);
+
+    // Se houver logos de Halloween configurados, usar em sequência
+    if (Array.isArray(ASSETS.logotipoHalloween) && ASSETS.logotipoHalloween.length > 0) {
+        let idx = 0;
+        fonte.src = comVersao(ASSETS.logotipoHalloween[idx]);
+        fonte.addEventListener('ended', () => {
+            idx = (idx + 1) % ASSETS.logotipoHalloween.length;
+            fonte.src = comVersao(ASSETS.logotipoHalloween[idx]);
+            fonte.play().catch(() => {});
+        });
+    } else {
+        fonte.src = comVersao(ASSETS.logotipo);
+    }
+
     document.body.appendChild(fonte);
     fonte.play().catch(() => {});
 
