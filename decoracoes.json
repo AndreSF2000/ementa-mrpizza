@@ -55,7 +55,20 @@
       "ecras": [
         "preco"
       ]
+    },
+    {
+      "nome": "pngtree-happy-halloween-text-typography-with-halloween-elements-png-image_3652061-removebg-preview",
+      "tipo": "imagem",
+      "ficheiro": "decoracoes/pngtree-happy-halloween-text-typography-with-halloween-elements-png-image_3652061-removebg-preview.png",
+      "x": 3.4,
+      "y": 6.8,
+      "largura": 18.7,
+      "opacidade": 1,
+      "rotacao": 0,
+      "ecras": [
+        "preco"
+      ]
     }
   ],
-  "versao": "1792950700647"
+  "versao": "1792950852943"
 }

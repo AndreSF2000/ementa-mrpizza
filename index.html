@@ -608,30 +608,17 @@ function iniciarChef() {
     caixa.style.width = cfg.chef.largura + '%';
     palco.appendChild(caixa);
 
-    // Sem o módulo ou sem clipes, fica a logo original — nunca um retângulo verde
-    if (typeof Animacoes !== 'object' || !cfgAnim.clips.length) {
-        const reserva = document.createElement('video');
-        reserva.muted = true;
-        reserva.loop = true;
-        reserva.playsInline = true;
-        reserva.autoplay = true;
-        reserva.preload = 'auto';
-        reserva.poster = comVersao(ASSETS.logotipoReserva);
-        reserva.setAttribute('muted', '');
-        reserva.setAttribute('playsinline', '');
-        reserva.className = 'logo-original';
+    /* Sem o módulo (ficheiro que não chegou), fica a logo em PNG. Com o
+       módulo, o leitor trata de tudo — mesmo sem clipes escolhidos, porque
+       é ele que faz o recorte do fundo verde. */
+    if (typeof Animacoes !== 'object') {
+        const reserva = document.createElement('img');
+        reserva.src = comVersao(ASSETS.logotipoReserva);
+        reserva.alt = '';
+        reserva.className = 'logo-original logo-a-vivo';
         reserva.style.width = '100%';
         reserva.style.display = 'block';
-        reserva.src = comVersao(ASSETS.logotipoAnimado);
-        reserva.addEventListener('error', () => {
-            reserva.replaceWith(Object.assign(document.createElement('img'), {
-                src: comVersao(ASSETS.logotipoReserva),
-                alt: '',
-                style: 'width:100%;display:block'
-            }));
-        });
         caixa.appendChild(reserva);
-        tocar(reserva);
         return;
     }
 
