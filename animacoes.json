@@ -1,0 +1,59 @@
+{
+  "proporcao": 0.973,
+  "zoom": 1.25,
+  "pausa": 2.5,
+  "transicao": {
+    "duracao": 0.6,
+    "logoInicial": 2.5,
+    "esperaLogo": 2.5,
+    "voltarLogo": true
+  },
+  "clips": [
+    {
+      "id": "1-balanco",
+      "nome": "Balança a cabeça",
+      "webm": "animacoes/1-balanco.webm",
+      "miniatura": "animacoes/1-balanco.png",
+      "duracao": 2.8,
+      "ativo": true,
+      "natural": 2.8
+    },
+    {
+      "id": "2-olhos",
+      "nome": "Olhos vermelhos",
+      "webm": "animacoes/2-olhos.webm",
+      "miniatura": "animacoes/2-olhos.png",
+      "duracao": 2.83,
+      "ativo": true,
+      "natural": 2.83
+    },
+    {
+      "id": "3-vampiro",
+      "nome": "Vampiro completo",
+      "webm": "animacoes/3-vampiro.webm",
+      "miniatura": "animacoes/3-vampiro.png",
+      "duracao": 3.9,
+      "ativo": true,
+      "natural": 3.87
+    },
+    {
+      "id": "4-capa",
+      "nome": "Capa escura",
+      "webm": "animacoes/4-capa.webm",
+      "miniatura": "animacoes/4-capa.png",
+      "duracao": 2.83,
+      "ativo": true,
+      "natural": 2.83
+    },
+    {
+      "id": "5-final",
+      "nome": "Pose final",
+      "webm": "animacoes/5-final.webm",
+      "miniatura": "animacoes/5-final.png",
+      "duracao": 1.8,
+      "ativo": true,
+      "natural": 1.8
+    }
+  ],
+  "versao": "1792940561952"
+}

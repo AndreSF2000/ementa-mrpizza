@@ -63,32 +63,27 @@
     /* Camada 1 (TV2) — preçário original, sem perdas */
     #precario { object-fit: fill; }
 
-    /* Camada 2 (TV2) — chef animado, com o verde removido */
+    /* Camada 2 (TV2) — logo original + animações */
     #logotipo {
         position: absolute;
         z-index: 2;
-        aspect-ratio: 456 / 418;
         height: auto;
         pointer-events: none;
     }
 
-    /* Reserva estática do chef */
-    #logotipo-png {
-        position: absolute;
-        z-index: 2;
-        pointer-events: none;
-    }
+    .leitor-logo { position: relative; width: 100%; height: 100%; }
 
-    /* Vídeo-fonte do chef: fora do ecrã, mas a descodificar */
-    #fonte-logotipo {
+    .leitor-logo .logo-original,
+    .leitor-logo .clipe-logo {
         position: absolute;
-        left: -20px;
-        top: -20px;
-        width: 2px;
-        height: 2px;
-        opacity: .01;
+        inset: 0;
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
         pointer-events: none;
-        z-index: -1;
+        transform: translateZ(0);
+        will-change: opacity;
     }
 
     /* Camada 3 — decorações (Halloween, etc.) */
@@ -212,6 +207,7 @@
 </div>
 
 <script src="efeitos.js"></script>
+<script src="animacoes.js"></script>
 <script>
 /* ------------------------------------------------------------------
    CONFIGURAÇÃO
@@ -221,14 +217,11 @@ const VERSAO = '2026-10-25b';
 const ASSETS = {
     menus: 'menus-mr-ermesinde-out-2026.mp4',
     precario: 'menu-tv-fixo.png',
-    logotipo: 'mrpizza.mp4',
     logotipoReserva: 'logotipo-chef.png',
     config: 'decoracoes.json',
+    animacoes: 'animacoes.json',
     efeitos: 'efeitos.js'
 };
-
-/* Recorte do chef dentro do vídeo (fundo verde) */
-const CORTE = { x: 350, y: 146, l: 456, a: 418 };
 
 /* Posição por omissão do chef, em percentagem do palco */
 const CHEF_OMISSAO = { x: 6.6, y: 59, largura: 12 };
@@ -347,6 +340,15 @@ function vigiarVideo(video) {
    ------------------------------------------------------------------ */
 let cfg = { versao: '', chef: CHEF_OMISSAO, decoracoes: [] };
 
+/* Animações da logo (ordem e transições vêm de animacoes.json) */
+let cfgAnim = {
+    versao: '',
+    proporcao: 0.973,
+    transicao: { duracao: .6, logoInicial: 2.4, esperaLogo: 4, voltarLogo: true },
+    clips: []
+};
+let leitorLogo = null;
+
 async function carregarConfig() {
     try {
         const resposta = await fetch(ASSETS.config + '?t=' + Date.now(), { cache: 'no-store' });
@@ -359,6 +361,22 @@ async function carregarConfig() {
         };
     } catch (e) {
         cfg = { versao: '', chef: CHEF_OMISSAO, decoracoes: [] };
+    }
+}
+
+async function carregarAnimacoes() {
+    try {
+        const resposta = await fetch(ASSETS.animacoes + '?t=' + Date.now(), { cache: 'no-store' });
+        if (!resposta.ok) throw new Error('HTTP ' + resposta.status);
+        const dados = await resposta.json();
+        cfgAnim = {
+            versao: dados.versao || '',
+            proporcao: Number(dados.proporcao) || .973,
+            transicao: Object.assign({ duracao: .6, logoInicial: 2.4, esperaLogo: 4, voltarLogo: true }, dados.transicao || {}),
+            clips: Array.isArray(dados.clips) ? dados.clips : []
+        };
+    } catch (e) {
+        cfgAnim = { versao: '', proporcao: .973, transicao: { duracao: .6, logoInicial: 2.4, esperaLogo: 4, voltarLogo: true }, clips: [] };
     }
 }
 
@@ -546,7 +564,15 @@ function ecraPreco() {
     img.addEventListener('load', async () => {
         ajustarPalco(img.naturalWidth / img.naturalHeight, false);
         palco.appendChild(img);
-        try { await img.decode(); } catch (e) {}
+
+        // O decode() pode nunca resolver (browser de TV, poupança de energia).
+        // Não vale a pena ficar à espera dele para arrancar a logo.
+        try {
+            await Promise.race([
+                img.decode().catch(() => {}),
+                new Promise((ok) => setTimeout(ok, 1200))
+            ]);
+        } catch (e) {}
 
         limparAviso();
         esconderLoader();
@@ -563,89 +589,34 @@ function ecraPreco() {
 }
 
 function iniciarChef() {
-    const fonte = document.createElement('video');
-    fonte.id = 'fonte-logotipo';
-    fonte.muted = true;
-    fonte.defaultMuted = true;
-    fonte.loop = true;
-    fonte.autoplay = true;
-    fonte.playsInline = true;
-    fonte.setAttribute('playsinline', '');
-    fonte.setAttribute('muted', '');
-    fonte.preload = 'auto';
-    fonte.src = comVersao(ASSETS.logotipo);
-    document.body.appendChild(fonte);
-    fonte.play().catch(() => {});
+    const caixa = document.createElement('div');
+    caixa.id = 'logotipo';
+    caixa.style.left = cfg.chef.x + '%';
+    caixa.style.top = cfg.chef.y + '%';
+    caixa.style.width = cfg.chef.largura + '%';
+    palco.appendChild(caixa);
 
-    const canvas = document.createElement('canvas');
-    canvas.id = 'logotipo';
-    canvas.width = CORTE.l;
-    canvas.height = CORTE.a;
-    canvas.style.left = cfg.chef.x + '%';
-    canvas.style.top = cfg.chef.y + '%';
-    canvas.style.width = cfg.chef.largura + '%';
-    palco.appendChild(canvas);
-
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    let ultimoTempo = -1;
-    let ultimoPintado = 0;
-    let arrancou = false;
-
-    function desenhar() {
-        requestAnimationFrame(desenhar);
-
-        if (document.hidden || fonte.readyState < 2) return;
-        if (fonte.currentTime === ultimoTempo) return;
-
-        const agora = performance.now();
-        if (agora - ultimoPintado < 66) return;   // ~15 fps
-        ultimoPintado = agora;
-        ultimoTempo = fonte.currentTime;
-
-        ctx.clearRect(0, 0, CORTE.l, CORTE.a);
-        ctx.drawImage(fonte, CORTE.x, CORTE.y, CORTE.l, CORTE.a, 0, 0, CORTE.l, CORTE.a);
-
-        const img = ctx.getImageData(0, 0, CORTE.l, CORTE.a);
-        const d = img.data;
-
-        for (let i = 0; i < d.length; i += 4) {
-            const r = d[i], g = d[i + 1], b = d[i + 2];
-            const verde = g - (r > b ? r : b);
-
-            if (verde > 45) { d[i + 3] = 0; continue; }
-            if (verde > 20) d[i + 3] = (255 * (45 - verde) / 25) | 0;
-
-            const alvo = (r + b) / 2;
-            if (g > alvo) d[i + 1] = alvo | 0;
-        }
-
-        ctx.putImageData(img, 0, 0);
-        arrancou = true;
-    }
-
-    desenhar();
-
-    // Se o vídeo não arrancar em 8 s, mostra o recorte estático
-    const limite = setTimeout(() => {
-        if (arrancou || fonte.readyState >= 2) return;
+    // Sem o módulo ou sem clipes, fica a logo original — nunca um retângulo verde
+    if (typeof Animacoes !== 'object' || !cfgAnim.clips.length) {
         const reserva = document.createElement('img');
-        reserva.id = 'logotipo-png';
         reserva.alt = '';
-        reserva.style.left = cfg.chef.x + '%';
-        reserva.style.top = cfg.chef.y + '%';
-        reserva.style.width = cfg.chef.largura + '%';
+        reserva.style.width = '100%';
+        reserva.style.display = 'block';
         reserva.src = comVersao(ASSETS.logotipoReserva);
         reserva.addEventListener('error', () => reserva.remove());
-        palco.appendChild(reserva);
-    }, 8000);
-    temporizadores.push(limite);
+        caixa.appendChild(reserva);
+        return;
+    }
+
+    leitorLogo = Animacoes.criarLeitor(caixa, cfgAnim);
 }
+
 
 /* ------------------------------------------------------------------
    Arranque
    ------------------------------------------------------------------ */
 async function arrancar() {
-    await carregarConfig();
+    await Promise.all([carregarConfig(), carregarAnimacoes()]);
     ajustarPalco(16 / 9, MODO === 'video');
 
     if (MODO === 'preco') {
@@ -774,13 +745,14 @@ async function marcaDe(url) {
 }
 
 async function marcaAtual() {
-    const [html, config, efeitos] = await Promise.all([
+    const [html, config, animacoes, efeitos] = await Promise.all([
         marcaDe(location.pathname),
         marcaDe(ASSETS.config),
+        marcaDe(ASSETS.animacoes),
         marcaDe(ASSETS.efeitos)
     ]);
-    if (!html && !config && !efeitos) return null;
-    return (html || '') + '|' + (config || '') + '|' + (efeitos || '');
+    if (!html && !config && !animacoes && !efeitos) return null;
+    return (html || '') + '|' + (config || '') + '|' + (animacoes || '') + '|' + (efeitos || '');
 }
 
 function avisarAtualizacao() {
