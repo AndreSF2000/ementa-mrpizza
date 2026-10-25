@@ -15,7 +15,7 @@
       "webm": "animacoes/1-balanco.webm",
       "miniatura": "animacoes/1-balanco.png",
       "duracao": 2.8,
-      "ativo": true,
+      "ativo": false,
       "natural": 2.8
     },
     {
@@ -24,7 +24,7 @@
       "webm": "animacoes/2-olhos.webm",
       "miniatura": "animacoes/2-olhos.png",
       "duracao": 2.83,
-      "ativo": true,
+      "ativo": false,
       "natural": 2.83
     },
     {
@@ -33,7 +33,7 @@
       "webm": "animacoes/3-vampiro.webm",
       "miniatura": "animacoes/3-vampiro.png",
       "duracao": 3.9,
-      "ativo": true,
+      "ativo": false,
       "natural": 3.87
     },
     {
@@ -42,7 +42,7 @@
       "webm": "animacoes/4-capa.webm",
       "miniatura": "animacoes/4-capa.png",
       "duracao": 2.83,
-      "ativo": true,
+      "ativo": false,
       "natural": 2.83
     },
     {
@@ -51,9 +51,9 @@
       "webm": "animacoes/5-final.webm",
       "miniatura": "animacoes/5-final.png",
       "duracao": 1.8,
-      "ativo": true,
+      "ativo": false,
       "natural": 1.8
     }
   ],
-  "versao": "1792940561952"
+  "versao": "1792941330545"
 }
