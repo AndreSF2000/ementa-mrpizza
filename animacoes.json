@@ -15,7 +15,7 @@
       "webm": "animacoes/1-balanco.webm",
       "miniatura": "animacoes/1-balanco.png",
       "duracao": 2.8,
-      "ativo": true,
+      "ativo": false,
       "natural": 2.8,
       "tema": "halloween"
     },
@@ -60,5 +60,5 @@
       "tema": "halloween"
     }
   ],
-  "versao": "1792946979961"
+  "versao": "1792946992777"
 }
