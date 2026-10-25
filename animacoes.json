@@ -1,11 +1,11 @@
 {
   "proporcao": 0.973,
   "zoom": 1.25,
-  "pausa": 2.5,
+  "pausa": 5,
   "transicao": {
     "duracao": 0.6,
-    "logoInicial": 2.5,
-    "esperaLogo": 2.5,
+    "logoInicial": 5,
+    "esperaLogo": 5,
     "voltarLogo": false
   },
   "clips": [
@@ -15,7 +15,7 @@
       "webm": "animacoes/1-balanco.webm",
       "miniatura": "animacoes/1-balanco.png",
       "duracao": 2.8,
-      "ativo": false,
+      "ativo": true,
       "natural": 2.8
     },
     {
@@ -55,5 +55,5 @@
       "natural": 1.8
     }
   ],
-  "versao": "1792942566767"
+  "versao": "1792942618108"
 }
