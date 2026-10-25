@@ -73,6 +73,17 @@
 
     .leitor-logo { position: relative; width: 100%; height: 100%; }
 
+    /* A logo original balança devagar, como no vídeo do chef */
+    .logo-a-vivo {
+        transform-origin: 50% 88%;
+        animation: logoRespira 11s ease-in-out infinite;
+    }
+
+    @keyframes logoRespira {
+        0%, 100% { transform: translateY(0) rotate(-2deg); }
+        50% { transform: translateY(-1.2%) rotate(2deg); }
+    }
+
     .leitor-logo .logo-original,
     .leitor-logo .clipe-logo {
         position: absolute;
@@ -218,6 +229,7 @@ const ASSETS = {
     menus: 'menus-mr-ermesinde-out-2026.mp4',
     precario: 'menu-tv-fixo.png',
     logotipoReserva: 'logotipo-chef.png',
+    logotipoAnimado: 'logotipo-animado.webm',
     config: 'decoracoes.json',
     animacoes: 'animacoes.json',
     efeitos: 'efeitos.js'
@@ -598,13 +610,28 @@ function iniciarChef() {
 
     // Sem o módulo ou sem clipes, fica a logo original — nunca um retângulo verde
     if (typeof Animacoes !== 'object' || !cfgAnim.clips.length) {
-        const reserva = document.createElement('img');
-        reserva.alt = '';
+        const reserva = document.createElement('video');
+        reserva.muted = true;
+        reserva.loop = true;
+        reserva.playsInline = true;
+        reserva.autoplay = true;
+        reserva.preload = 'auto';
+        reserva.poster = comVersao(ASSETS.logotipoReserva);
+        reserva.setAttribute('muted', '');
+        reserva.setAttribute('playsinline', '');
+        reserva.className = 'logo-original';
         reserva.style.width = '100%';
         reserva.style.display = 'block';
-        reserva.src = comVersao(ASSETS.logotipoReserva);
-        reserva.addEventListener('error', () => reserva.remove());
+        reserva.src = comVersao(ASSETS.logotipoAnimado);
+        reserva.addEventListener('error', () => {
+            reserva.replaceWith(Object.assign(document.createElement('img'), {
+                src: comVersao(ASSETS.logotipoReserva),
+                alt: '',
+                style: 'width:100%;display:block'
+            }));
+        });
         caixa.appendChild(reserva);
+        tocar(reserva);
         return;
     }
 
@@ -632,17 +659,32 @@ async function arrancar() {
 
 /* ------------------------------------------------------------------
    MANTER TV ATIVA (anti-standby)
+   ------------------------------------------------------------------
+   Pede ao dispositivo para não apagar o ecrã (Screen Wake Lock).
+   Funciona no Chrome/Edge/Android e num PC; o browser das TVs LG/Samsung
+   não tem esta API, e aí o "ecrã desligado" é uma definição do painel.
    ------------------------------------------------------------------ */
+let bloqueioEcra = null;
+let aPedirEcra = false;
+
 async function manterAtivo() {
+    if (!('wakeLock' in navigator)) return;
+    if (bloqueioEcra || aPedirEcra) return;
+    if (document.visibilityState !== 'visible') return;
+
+    aPedirEcra = true;
     try {
-        if ('wakeLock' in navigator) {
-            await navigator.wakeLock.request('screen');
-        }
-    } catch (e) {}
+        bloqueioEcra = await navigator.wakeLock.request('screen');
+        bloqueioEcra.addEventListener('release', () => { bloqueioEcra = null; });
+    } catch (e) {
+        // o dispositivo recusou (bateria fraca, política do browser…)
+    }
+    aPedirEcra = false;
 }
 
 manterAtivo();
 setInterval(manterAtivo, 60000);
+document.addEventListener('keydown', manterAtivo);
 
 setInterval(() => {
     try {
@@ -667,10 +709,6 @@ function iniciarAudioSilencioso() {
 
 document.addEventListener('click', iniciarAudioSilencioso, { once: true });
 document.addEventListener('touchstart', iniciarAudioSilencioso, { once: true });
-document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) manterAtivo();
-});
-
 /* ------------------------------------------------------------------
    FORÇAR ATUALIZAÇÃO REMOTA
    ------------------------------------------------------------------ */
@@ -708,20 +746,29 @@ document.addEventListener('click', async () => {
             await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
         } catch (e) {}
     }
-    const video = palco.querySelector('video.media');
-    if (video && video.paused) tocar(video);
+    palco.querySelectorAll('video.media, video.logo-original').forEach((v) => {
+        if (v.paused) tocar(v);
+    });
+    manterAtivo();
 });
 
-/* Evita que o ecrã suspenda */
-async function manterAcordado() {
-    try {
-        if ('wakeLock' in navigator) await navigator.wakeLock.request('screen');
-    } catch (e) {}
-}
+/* Vigia a logo: se o vídeo parar, volta a arrancar sozinho — é o que faz
+   a imagem voltar quando a TV «pestaneja» */
+setInterval(() => {
+    if (document.hidden) return;
+    const logo = palco.querySelector('video.logo-original');
+    if (logo && logo.paused) tocar(logo);
+}, 15000);
+
+/* Ao voltar do ecrã desligado, retoma o pedido e os vídeos */
 document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) manterAcordado();
+    if (document.hidden) return;
+    manterAtivo();
+
+    palco.querySelectorAll('video.media, video.logo-original').forEach((v) => {
+        if (v.paused) tocar(v);
+    });
 });
-manterAcordado();
 
 /* ------------------------------------------------------------------
    Atualizações automáticas

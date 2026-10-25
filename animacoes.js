@@ -29,6 +29,10 @@
     };
 
     const LOGO = 'logotipo-chef.png';
+    /* O mesmo desenho com o balanço já gravado: além de dar vida à logo,
+       mantém uma reprodução sempre ativa no ecrã do preçário (é o que
+       mantém a TV acordada, tal como o vídeo dos menus faz na TV1). */
+    const LOGO_VIDEO = 'logotipo-animado.webm';
 
     function criarLeitor(host, config, opcoes) {
         const op = opcoes || {};
@@ -37,12 +41,29 @@
         host.innerHTML = '';
         host.classList.add('leitor-logo');
 
-        const logo = document.createElement('img');
+        /* A logo original é um vídeo em ciclo (balanço lento). O PNG fica
+           como cartaz, para nunca se ver um espaço vazio. */
+        const logo = document.createElement('video');
         logo.className = 'logo-original';
-        logo.alt = '';
-        logo.src = LOGO;
+        logo.muted = true;
+        logo.loop = true;
+        logo.playsInline = true;
+        logo.autoplay = true;
+        logo.preload = 'auto';
+        logo.poster = LOGO;
+        logo.setAttribute('muted', '');
+        logo.setAttribute('playsinline', '');
+        logo.src = url(LOGO_VIDEO);
         logo.style.opacity = '1';
         host.appendChild(logo);
+
+        const arrancarLogo = () => {
+            const p = logo.play();
+            if (p && p.catch) p.catch(() => {});
+        };
+
+        arrancarLogo();
+        logo.addEventListener('loadeddata', arrancarLogo, { once: true });
 
         const camadas = [camada(), camada()];
 
