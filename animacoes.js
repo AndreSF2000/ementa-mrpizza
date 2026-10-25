@@ -34,6 +34,141 @@
        mantém a TV acordada, tal como o vídeo dos menus faz na TV1). */
     const LOGO_VIDEO = 'logotipo-animado.webm';
 
+    /* ------------------------------------------------------------------
+       SUPERFÍCIE DE PINTURA — recorte do fundo verde
+       ------------------------------------------------------------------
+       Cada clipe traz um fundo verde próprio para recorte. O vídeo em si
+       nunca é mostrado: desenha-se cada fotograma num <canvas>, apagam-se
+       os pixels verdes e é o canvas que fica no ecrã.
+
+       É assim porque o browser da TV descodifica bem o vídeo mas ignora o
+       canal de transparência — a logo aparecia dentro de um retângulo
+       opaco por cima da ementa. Aqui o recorte é feito pelo próprio site,
+       por isso depende só dos pixels, e não do que a TV faz com o alfa.
+
+       A largura do canvas começa em 384 px e desce sozinha se o aparelho
+       não acompanhar (o recorte custa CPU; numa TV fraca isso conta).
+       ------------------------------------------------------------------ */
+
+    const superficies = [];
+    let aPintar = false;
+    let ultimoPintado = 0;
+    let larguraMax = 384;
+    let custoPintura = 0;
+
+    /* Apaga o fundo verde do fotograma. Os pixels que restam nas bordas
+       perdem o verde da contaminação, para não ficar um halo da cor. */
+    function recortarVerde(g, largura, altura) {
+        const img = g.getImageData(0, 0, largura, altura);
+        const d = img.data;
+
+        /* Todos os clipes têm fundo verde até aos cantos. Se o canto vier de
+           outra cor, o fotograma ainda está a ser escrito pelo descodificador
+           (acontece logo depois de saltar para o início) e aparece como uma
+           faixa colorida no topo: este não se mostra. */
+        if (d[1] - (d[0] > d[2] ? d[0] : d[2]) < 30) return false;
+
+        for (let i = 0; i < d.length; i += 4) {
+            const r = d[i];
+            const v = d[i + 1];
+            const az = d[i + 2];
+
+            // só o verde vivo do fundo (o verde escuro da capa fica inteiro)
+            const verde = v - (r > az ? r : az);
+            if (verde <= 24 || v <= 70) continue;
+
+            const opaco = 255 - (verde - 24) * 6;
+            if (opaco <= 0) {
+                d[i + 3] = 0;
+            } else {
+                d[i + 3] = opaco;
+                d[i + 1] = r > az ? r : az;
+            }
+        }
+
+        g.putImageData(img, 0, 0);
+        return true;
+    }
+
+    function pintarFotograma(video, tela) {
+        const c = video.videoWidth;
+        const a = video.videoHeight;
+        if (!c || !a) return false;
+
+        const largura = Math.min(c, larguraMax);
+        const altura = Math.max(1, Math.round(a * (largura / c)));
+
+        if (tela.width !== largura || tela.height !== altura) {
+            tela.width = largura;
+            tela.height = altura;
+        }
+
+        if (!tela._ctx) tela._ctx = tela.getContext('2d', { willReadFrequently: true });
+        const g = tela._ctx;
+
+        const inicio = performance.now();
+        g.clearRect(0, 0, largura, altura);
+        g.drawImage(video, 0, 0, largura, altura);
+        const bom = recortarVerde(g, largura, altura);
+        // fotograma recusado: não se mostra o verde do fundo à espera do próximo
+        if (!bom) g.clearRect(0, 0, largura, altura);
+
+        const gasto = performance.now() - inicio;
+        custoPintura = custoPintura ? custoPintura * 0.85 + gasto * 0.15 : gasto;
+        return bom;
+    }
+
+    function pintar() {
+        if (!aPintar) return;
+        if (document.hidden) return requestAnimationFrame(pintar);
+
+        const agora = performance.now();
+        if (agora - ultimoPintado < 28) return requestAnimationFrame(pintar);
+        ultimoPintado = agora;
+
+        for (let i = superficies.length - 1; i >= 0; i--) {
+            const s = superficies[i];
+            if (!s.tela.isConnected) { superficies.splice(i, 1); continue; }
+            if (s.video.paused || s.video.readyState < 2) continue;
+            // durante um salto, o browser pode entregar um fotograma a meio de
+            // ser escrito (aparece uma faixa de cor no topo): espera-se pelo
+            // próximo
+            if (s.video.seeking) continue;
+            if (s.tela.style.opacity === '0') continue;
+            if (!pintarFotograma(s.video, s.tela)) continue;
+            s.pintou = true;
+        }
+
+        // aparelho lento: baixa a resolução em vez de deixar o vídeo aos saltos
+        if (custoPintura > 42 && larguraMax > 192) larguraMax -= 64;
+
+        if (!superficies.length) { aPintar = false; return; }
+        requestAnimationFrame(pintar);
+    }
+
+    function criarSuperficie(video) {
+        const tela = document.createElement('canvas');
+        tela.className = video.className;
+        tela.setAttribute('aria-hidden', 'true');
+        tela.style.opacity = '0';
+        video.parentNode.insertBefore(tela, video.nextSibling);
+        video.style.visibility = 'hidden';
+        video._tela = tela;
+
+        superficies.push({ video: video, tela: tela, pintou: false });
+
+        if (!aPintar) {
+            aPintar = true;
+            requestAnimationFrame(pintar);
+        }
+        return tela;
+    }
+
+    /* O que se vê (e o que leva com as transições) é a tela, não o vídeo */
+    function estilo(video) {
+        return video._tela || video;
+    }
+
     function criarLeitor(host, config, opcoes) {
         const op = opcoes || {};
         let cfg = normalizar(config || {});
@@ -54,8 +189,10 @@
         logo.setAttribute('muted', '');
         logo.setAttribute('playsinline', '');
         logo.src = url(LOGO_VIDEO);
-        logo.style.opacity = '1';
         host.appendChild(logo);
+
+        const telaLogo = criarSuperficie(logo);
+        telaLogo.style.opacity = '1';
 
         const arrancarLogo = () => {
             const p = logo.play();
@@ -66,6 +203,9 @@
         logo.addEventListener('loadeddata', arrancarLogo, { once: true });
 
         const camadas = [camada(), camada()];
+
+        /* Reserva para os browsers que perdem o alfa até no canvas */
+        let png = null;
 
         let qual = 0;
         let indice = -1;
@@ -81,8 +221,8 @@
             v.preload = 'auto';
             v.setAttribute('muted', '');
             v.setAttribute('playsinline', '');
-            v.style.opacity = '0';
             host.appendChild(v);
+            criarSuperficie(v);
             return v;
         }
 
@@ -133,21 +273,48 @@
 
         function fundo(visivel) {
             const d = cfg.transicao.duracao;
-            logo.style.transition = d > 0 ? 'opacity ' + d + 's ease-in-out' : 'none';
-            logo.style.opacity = visivel ? '1' : '0';
+            const alvo = png || estilo(logo);
+            alvo.style.transition = d > 0 ? 'opacity ' + d + 's ease-in-out' : 'none';
+            alvo.style.opacity = visivel ? '1' : '0';
         }
 
         function esbater(video, visivel, duracao) {
             const d = duracao == null ? cfg.transicao.duracao : duracao;
-            video.style.transition = d > 0 ? 'opacity ' + d + 's ease-in-out' : 'none';
-            video.style.opacity = visivel ? '1' : '0';
+            const alvo = estilo(video);
+            alvo.style.transition = d > 0 ? 'opacity ' + d + 's ease-in-out' : 'none';
+            alvo.style.opacity = visivel ? '1' : '0';
         }
 
         function pararCamadas() {
             camadas.forEach((v) => {
                 try { v.pause(); } catch (e) {}
-                v.style.opacity = '0';
+                estilo(v).style.opacity = '0';
             });
+        }
+
+        /* Rede de segurança: se o aparelho não descodificar o vídeo da
+           logo, fica a logo em PNG com o balanço em CSS — nunca um espaço
+           vazio nem um retângulo opaco em frente da ementa. */
+        function mostrarPng() {
+            if (png || !logo.isConnected) return;
+
+            png = document.createElement('img');
+            png.className = 'logo-original logo-a-vivo';
+            png.src = LOGO;
+            png.style.transition = 'opacity .6s ease-in-out';
+            png.style.opacity = telaLogo.style.opacity === '0' ? '0' : '1';
+            host.insertBefore(png, logo);
+
+            telaLogo.style.opacity = '0';
+            camadas.forEach((v) => {
+                try { v.pause(); } catch (e) {}
+                estilo(v).style.opacity = '0';
+            });
+
+            geracao++;
+            limparTimers();
+            indice = -1;
+            avisar(-1, null);
         }
 
         function avisar(i, clip) {
@@ -164,6 +331,7 @@
 
         function tocar(posicao, restante, fade) {
             if (!ligado) return;
+            if (png) { fundo(true); return; }
             if (!cfg.clips.length) { fundo(true); return; }
 
             indice = posicao % cfg.clips.length;
@@ -282,8 +450,8 @@
                 if (arrancou || !ligado || g !== geracao) return;
                 registar('falhar', clip.id);
                 // Este clipe não abre (formato em falta no browser):
-                // salta para o seguinte, sem deixar um retângulo verde no ecrã.
-                entrada.style.opacity = '0';
+                // salta para o seguinte, sem deixar um retângulo no ecrã.
+                estilo(entrada).style.opacity = '0';
                 if (cfg.clips.length > 1 && indice + 1 < cfg.clips.length) return tocar(indice + 1);
                 fundo(true);
             };
@@ -349,8 +517,9 @@
             /* As animações são ampliadas em volta do centro do desenho (48,5%
              * da altura), por isso crescem sem sair do sítio. */
             camadas.forEach((v) => {
-                v.style.transformOrigin = '50% 48.5%';
-                v.style.transform = cfg.zoom === 1 ? '' : 'scale(' + cfg.zoom + ')';
+                const c = estilo(v);
+                c.style.transformOrigin = '50% 48.5%';
+                c.style.transform = cfg.zoom === 1 ? '' : 'scale(' + cfg.zoom + ')';
             });
 
             depois(cfg.transicao.logoInicial * 1000, () => tocar(0));
@@ -361,6 +530,13 @@
             limparTimers();
             pararCamadas();
         }
+
+        /* Se ao fim de 2,5 s a logo ainda não pintou nada (vídeo que não
+           abre neste aparelho), mostra-se o PNG em vez de um espaço vazio. */
+        setTimeout(() => {
+            const s = superficies.find((x) => x.video === logo);
+            if (s && !s.pintou) mostrarPng();
+        }, 2500);
 
         iniciar();
 

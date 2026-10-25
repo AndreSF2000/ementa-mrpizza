@@ -14,7 +14,7 @@
       "nome": "Balança a cabeça",
       "webm": "animacoes/1-balanco.webm",
       "miniatura": "animacoes/1-balanco.png",
-      "duracao": 2.8,
+      "duracao": 2.7,
       "ativo": false,
       "natural": 2.8,
       "tema": "halloween"
@@ -60,5 +60,5 @@
       "tema": "halloween"
     }
   ],
-  "versao": "1792949137086"
+  "versao": "1792950700647"
 }

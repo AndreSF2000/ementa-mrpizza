@@ -4,6 +4,58 @@
     "y": 56.9,
     "largura": 12
   },
-  "decoracoes": [],
-  "versao": "1792949137086"
+  "decoracoes": [
+    {
+      "nome": "Teia",
+      "tipo": "figura",
+      "figura": "teia",
+      "x": 0,
+      "y": 0,
+      "largura": 13,
+      "opacidade": 0.5,
+      "ecras": [
+        "preco"
+      ]
+    },
+    {
+      "nome": "Abóbora",
+      "tipo": "figura",
+      "figura": "abobora",
+      "x": 0.5,
+      "y": 86,
+      "largura": 8,
+      "rotacao": -8,
+      "anim": "flutuar",
+      "ecras": [
+        "preco"
+      ]
+    },
+    {
+      "nome": "Abóbora pequena",
+      "tipo": "figura",
+      "figura": "abobora",
+      "x": 93.7,
+      "y": -1.5,
+      "largura": 6,
+      "rotacao": 10,
+      "anim": "flutuar",
+      "ecras": [
+        "preco"
+      ]
+    },
+    {
+      "nome": "Fantasma",
+      "tipo": "figura",
+      "figura": "fantasma",
+      "x": 20,
+      "y": 0.5,
+      "largura": 5.5,
+      "anim": "flutuar",
+      "opacidade": 0.95,
+      "ecras": [
+        "preco"
+      ]
+    }
+  ],
+  "versao": "1792950700647"
 }
