@@ -1,12 +1,12 @@
 {
   "proporcao": 0.973,
   "zoom": 1.25,
-  "pausa": 10,
+  "pausa": 8,
   "logoBase": "mrpizza-logo",
   "transicao": {
     "duracao": 0.6,
-    "logoInicial": 10,
-    "esperaLogo": 10,
+    "logoInicial": 8,
+    "esperaLogo": 8,
     "voltarLogo": false
   },
   "clips": [
@@ -35,7 +35,7 @@
       "nome": "Olhos vermelhos",
       "webm": "animacoes/2-olhos.webm",
       "miniatura": "animacoes/2-olhos.png",
-      "duracao": 2.83,
+      "duracao": 2.8,
       "ativo": true,
       "natural": 3.07,
       "tema": "halloween"
@@ -55,7 +55,7 @@
       "nome": "Capa escura",
       "webm": "animacoes/4-capa.webm",
       "miniatura": "animacoes/4-capa.png",
-      "duracao": 2.83,
+      "duracao": 2.8,
       "ativo": true,
       "natural": 3.07,
       "tema": "halloween"
@@ -71,5 +71,5 @@
       "tema": "halloween"
     }
   ],
-  "versao": "1793104599220"
+  "versao": "1793105070462"
 }

@@ -99,6 +99,26 @@
         will-change: opacity;
     }
 
+    /*
+     * Camada anti-standby (TV2) — vai ACIMA de tudo, dentro do #ecra.
+     * É um vídeo minúsculo esticado em ecrã inteiro com 2% de opacidade:
+     * invisível ao olho, mas reprodução a sério. Várias TVs só apagam o
+     * painel quando não detetam nenhum vídeo a tocar. Não tapa nada (e não
+     * apanha cliques): o preçário continua legível por baixo, camada a
+     * camada. O carregador (100) e os avisos (99 / 999) ficam por cima.
+     */
+    #vigia {
+        position: absolute;
+        inset: 0;
+        z-index: 50;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        opacity: .02;
+        pointer-events: none;
+        transform: translateZ(0);
+    }
+
     /* Camada 3 — decorações (Halloween, etc.) */
     .decoracao {
         position: absolute;
@@ -232,6 +252,7 @@ const ASSETS = {
     precario: 'menu-tv-fixo.png',
     logotipoReserva: 'logotipo-chef.png',
     logotipoAnimado: 'logotipo-animado.webm',
+    vigia: 'vigia.webm',
     config: 'decoracoes.json',
     animacoes: 'animacoes.json',
     efeitos: 'efeitos.js'
@@ -627,6 +648,49 @@ function iniciarChef() {
     leitorLogo = Animacoes.criarLeitor(caixa, cfgAnim);
 }
 
+/* ------------------------------------------------------------------
+   Camada anti-standby (TV2)
+   Um vídeo minúsculo (vigia.webm) esticado em ecrã inteiro por cima de
+   todas as camadas, com 2% de opacidade: não se vê, mas a TV vê um vídeo
+   a tocar — é o único sinal que uma página consegue dar para o painel não
+   entrar em poupança de energia. Se a TV apagar por regra do próprio
+   firmware (temporizador interno, modo hotel), nenhum site o impede.
+   ------------------------------------------------------------------ */
+function iniciarVigia() {
+    if (document.getElementById('vigia')) return;
+
+    const v = document.createElement('video');
+    v.id = 'vigia';
+    v.muted = true;
+    v.defaultMuted = true;
+    v.loop = true;
+    v.autoplay = true;
+    v.playsInline = true;
+    v.setAttribute('playsinline', '');
+    v.setAttribute('muted', '');
+    v.setAttribute('aria-hidden', 'true');
+    v.preload = 'auto';
+    v.disablePictureInPicture = true;
+    v.src = comVersao(ASSETS.vigia);
+
+    document.getElementById('ecra').appendChild(v);
+
+    /* O primeiro play() costuma ser recusado (o elemento acabou de nascer),
+       por isso insiste-se nos primeiros segundos e sempre que a TV acorda. */
+    tocar(v);
+    [400, 1500, 4000, 9000, 20000].forEach((ms) => {
+        temporizadores.push(setTimeout(() => { if (v.paused) tocar(v); }, ms));
+    });
+    vigiarVideo(v);
+}
+
+/* Todos os vídeos do ecrã, arrancados de uma vez */
+function tocarTudo() {
+    document.querySelectorAll('video.media, video.logo-original, #vigia').forEach((v) => {
+        if (v.paused) tocar(v);
+    });
+}
+
 
 /* ------------------------------------------------------------------
    Arranque
@@ -637,6 +701,7 @@ async function arrancar() {
 
     if (MODO === 'preco') {
         ecraPreco();
+        iniciarVigia();
     } else {
         ecraVideo();
     }
@@ -735,28 +800,22 @@ document.addEventListener('click', async () => {
             await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
         } catch (e) {}
     }
-    palco.querySelectorAll('video.media, video.logo-original').forEach((v) => {
-        if (v.paused) tocar(v);
-    });
+    tocarTudo();
     manterAtivo();
 });
 
-/* Vigia a logo: se o vídeo parar, volta a arrancar sozinho — é o que faz
-   a imagem voltar quando a TV «pestaneja» */
+/* Vigia os vídeos: se algum parar, volta a arrancar sozinho — é o que faz
+   a imagem (e a camada anti-standby) voltar quando a TV «pestaneja» */
 setInterval(() => {
     if (document.hidden) return;
-    const logo = palco.querySelector('video.logo-original');
-    if (logo && logo.paused) tocar(logo);
+    tocarTudo();
 }, 15000);
 
 /* Ao voltar do ecrã desligado, retoma o pedido e os vídeos */
 document.addEventListener('visibilitychange', () => {
     if (document.hidden) return;
     manterAtivo();
-
-    palco.querySelectorAll('video.media, video.logo-original').forEach((v) => {
-        if (v.paused) tocar(v);
-    });
+    tocarTudo();
 });
 
 /* ------------------------------------------------------------------
