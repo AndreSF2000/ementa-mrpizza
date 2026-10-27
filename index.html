@@ -106,12 +106,14 @@
      * ecrã inteiro a tocar; a dos preços passa a ter as mesmas condições:
      * vigia.mp4 é H.264, 1920x1080, 30 fps, sem som, em ciclo.
      *
-     * O filme é preto puro e a camada soma-se à imagem («screen»): somar
-     * preto não muda um único pixel, por isso o preçário fica igual — mas
-     * para a TV há reprodução a sério por cima de todas as camadas. Onde
-     * o browser não souber somar camadas, fica opaca a 2% (invisível na
-     * mesma). Não tapa nada nem apanha cliques; o carregador (100) e os
-     * avisos (99 / 999) ficam por cima.
+     * ATENÇÃO — a TV desenha o vídeo numa camada própria e ignora o CSS
+     * (opacidade e «mix-blend-mode»). Com a camada a 100% e uma soma de
+     * cores que a TV não faz, o filme preto ficou POR CIMA de tudo e o
+     * ecrã ficou preto. Por isso: 2% de opacidade, sem somas de cor, e
+     * desligada por omissão — liga-se com ?vigia=1 para testar.
+     *
+     * Com 2% nem se nota o preto (medido: no máximo 2% mais escuro num
+     * ponto), mas a TV vê um vídeo a tocar por cima de todas as camadas.
      */
     #vigia {
         position: absolute;
@@ -120,16 +122,9 @@
         width: 100%;
         height: 100%;
         object-fit: cover;
-        opacity: .02;              /* reserva para browsers sem «screen» */
+        opacity: .02;
         pointer-events: none;
         transform: translateZ(0);
-    }
-
-    @supports (mix-blend-mode: screen) {
-        #vigia {
-            opacity: 1;
-            mix-blend-mode: screen;
-        }
     }
 
     /* Camada 3 — decorações (Halloween, etc.) */
@@ -278,6 +273,12 @@
    ------------------------------------------------------------------ */
 const VERSAO = '2026-10-25b';
 
+/* Desde quando o ecrã está ligado nesta página e quantas vezes foi preciso
+   voltar a arrancar a camada anti-standby. Serve para responder à única
+   pergunta que importa no restaurante: «há quanto tempo está a aguentar?» */
+const ARRANQUE = Date.now();
+let recomecosVigia = 0;
+
 const ASSETS = {
     menus: 'menus-mr-ermesinde-out-2026.mp4',
     precario: 'menu-tv-fixo.png',
@@ -381,14 +382,17 @@ function vigiarVideo(video) {
     let ultimoTempo = -1;
     let parado = 0;
 
+    const contar = () => { if (video.id === 'vigia') recomecosVigia++; };
+
     const id = setInterval(() => {
         if (document.hidden) return;
-        if (video.paused) { tocar(video); return; }
+        if (video.paused) { contar(); tocar(video); return; }
         if (video.readyState < 3) return;
 
         if (video.currentTime === ultimoTempo) {
             if (++parado >= 2) {
                 parado = 0;
+                contar();
                 video.load();
                 tocar(video);
             }
@@ -664,8 +668,9 @@ function iniciarChef() {
 
     /* Sem o módulo (ficheiro que não chegou), fica a logo em PNG. Com o
        módulo, o leitor trata de tudo — mesmo sem clipes escolhidos, porque
-       é ele que faz o recorte do fundo verde. */
-    if (typeof Animacoes !== 'object') {
+       é ele que faz o recorte do fundo verde. ?semanim=1 força a logo
+       simples, para se perceber na TV o que está a causar um problema. */
+    if (typeof Animacoes !== 'object' || semAnimacoes()) {
         const reserva = document.createElement('img');
         reserva.src = comVersao(ASSETS.logotipoReserva);
         reserva.alt = '';
@@ -681,10 +686,11 @@ function iniciarChef() {
 
 /* ------------------------------------------------------------------
    Camada anti-standby (TV2)
-   Um vídeo minúsculo (vigia.webm) esticado em ecrã inteiro por cima de
-   todas as camadas, com 2% de opacidade: não se vê, mas a TV vê um vídeo
-   a tocar — é o único sinal que uma página consegue dar para o painel não
-   entrar em poupança de energia. Se a TV apagar por regra do próprio
+   Um vídeo H.264 de 1920x1080 esticado em ecrã inteiro por cima de todas
+   as camadas, com 2% de opacidade: não se vê, mas a TV vê um vídeo a
+   tocar. Ficou desligada por omissão porque na TV, com a camada a 100% e
+   uma soma de cores, o ecrã ficou preto (a TV desenha vídeos à parte do
+   CSS). Liga-se com ?vigia=1. Se a TV apagar por regra do próprio
    firmware (temporizador interno, modo hotel), nenhum site o impede.
    ------------------------------------------------------------------ */
 function iniciarVigia() {
@@ -715,6 +721,19 @@ function iniciarVigia() {
     vigiarVideo(v);
 }
 
+/* Interruptores de teste, para se perceber na TV o que causa um problema:
+   ?vigia=1  — liga a camada anti-standby
+   ?semanim=1 — desliga as animações (fica só a logo simples) */
+function quereVigia() {
+    const p = new URLSearchParams(location.search);
+    return p.has('vigia') && p.get('vigia') !== '0';
+}
+
+function semAnimacoes() {
+    const p = new URLSearchParams(location.search);
+    return p.has('semanim') && p.get('semanim') !== '0';
+}
+
 /* Todos os vídeos do ecrã, arrancados de uma vez */
 function tocarTudo() {
     document.querySelectorAll('video.media, video.logo-original, #vigia').forEach((v) => {
@@ -732,7 +751,7 @@ async function arrancar() {
 
     if (MODO === 'preco') {
         ecraPreco();
-        iniciarVigia();
+        if (quereVigia()) iniciarVigia();
     } else {
         ecraVideo();
     }
@@ -866,13 +885,15 @@ function linhaDoDiag(nome, el) {
         ' · rs' + el.readyState +
         ' · ' + el.currentTime.toFixed(1) + 's' +
         (el.videoWidth ? ' · ' + el.videoWidth + 'x' + el.videoHeight : ' · sem imagem') +
+        ' · op' + (el.style.opacity === '' ? '1' : el.style.opacity) +
         (el.error ? ' · ERRO ' + el.error.code : '');
 }
 
 function textoDoDiag() {
     const telas = [...document.querySelectorAll('canvas')];
     const aPintar = telas.filter((t) => t.width > 1 && t.style.opacity !== '0').length;
-    const clipes = [...document.querySelectorAll('video.clipe-logo')];
+    const clipes = [...document.querySelectorAll('video.clipe-logo')]
+        .filter((v) => v.currentSrc || v.src);   // a segunda camada só tem fonte quando entra em cena
 
     return [
         'MR. PIZZA · diagnóstico',
@@ -880,10 +901,15 @@ function textoDoDiag() {
         'animações: ' + (typeof Animacoes === 'object' ? 'sim' : 'NÃO (animacoes.js)') +
             ' · clipes na lista: ' + ((cfgAnim && cfgAnim.clips) || []).length,
         'telas a pintar: ' + aPintar + ' · página: ' + document.visibilityState,
-        linhaDoDiag('vigia', document.getElementById('vigia')),
+        document.getElementById('vigia')
+            ? linhaDoDiag('vigia', document.getElementById('vigia'))
+            : 'vigia: desligado (liga com ?vigia=1)',
         linhaDoDiag('logo', document.querySelector('video.logo-original')),
-        linhaDoDiag('clipe 1', clipes[0]),
-        'wake lock: ' + (bloqueioEcra ? 'ativo' : 'não')
+        linhaDoDiag('clipe', clipes[0]),
+        'wake lock: ' + (bloqueioEcra ? 'ativo' : 'não'),
+        'ligado há ' + Math.floor((Date.now() - ARRANQUE) / 60000) + ' min' +
+            ' · vigia recomeçado ' + recomecosVigia + '×',
+        'relógio ' + new Date().toLocaleTimeString('pt-PT')
     ].join('\n');
 }
 
