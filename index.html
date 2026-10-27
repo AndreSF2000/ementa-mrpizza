@@ -231,6 +231,22 @@
         pointer-events: none;
     }
 
+    /* Dica para entrar em ecrã cheio (desaparece sozinha) */
+    #dica-ecran {
+        position: fixed;
+        top: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 900;
+        padding: 8px 16px;
+        border-radius: 999px;
+        background: rgba(0, 0, 0, .72);
+        border: 1px solid rgba(255, 255, 255, .18);
+        color: #fff;
+        font: 500 clamp(12px, 1.5vh, 20px)/1.2 system-ui, sans-serif;
+        pointer-events: none;
+    }
+
     /* Aviso de atualização */
     #aviso-atualizacao {
         position: fixed;
@@ -906,15 +922,86 @@ verificarForcar();
 window.addEventListener('resize', () => ajustarPalco(proporcao, cobrirEcra));
 window.addEventListener('DOMContentLoaded', arrancar);
 
-/* Ecrã cheio com um clique no telecomando */
-document.addEventListener('click', async () => {
-    if (!document.fullscreenElement) {
-        try {
-            await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
-        } catch (e) {}
+/*
+ * ECRÃ CHEIO
+ *
+ * A TV dos menus está em ecrã cheio e não apaga; a dos preços mostra a
+ * barra cinzenta do navegador. Além de ser feio, um ecrã cheio é a única
+ * forma de a página ficar sem as barras do browser — e há painéis que
+ * tratam de maneira diferente uma página em ecrã inteiro.
+ *
+ * O browser só deixa entrar em ecrã cheio depois de um toque no
+ * telecomando, por isso: tenta-se ao arrancar (falha em silêncio) e em
+ * qualquer tecla ou clique. Se ao fim de 15 s continuar sem ecrã cheio,
+ * aparece uma dica pequena a pedir o OK — e desaparece sozinha quando
+ * entrar.
+ */
+let dicaEcran = null;
+let tentouEcranCheio = false;
+
+async function entrarEcraCheio() {
+    if (document.fullscreenElement) return true;
+
+    const el = document.documentElement;
+    try {
+        if (el.requestFullscreen) await el.requestFullscreen({ navigationUI: 'hide' });
+        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    } catch (e) {
+        return false;
     }
+
+    const ok = !!document.fullscreenElement;
+    if (ok) {
+        registarLog('info', 'ecrã cheio ligado');
+        esconderDicaEcran();
+    }
+    return ok;
+}
+
+function mostrarDicaEcran() {
+    if (dicaEcran || document.fullscreenElement) return;
+    dicaEcran = document.createElement('div');
+    dicaEcran.id = 'dica-ecran';
+    dicaEcran.textContent = 'Ecrã inteiro: carrega OK no telecomando';
+    document.body.appendChild(dicaEcran);
+    registarLog('info', 'sem ecrã cheio — dica mostrada');
+}
+
+function esconderDicaEcran() {
+    if (!dicaEcran) return;
+    dicaEcran.remove();
+    dicaEcran = null;
+}
+
+function tentarEcranCheio() {
+    if (tentouEcranCheio || document.fullscreenElement) return;
+    tentouEcranCheio = true;
+    entrarEcraCheio();
+}
+
+document.addEventListener('fullscreenchange', () => {
+    registarLog('info', document.fullscreenElement ? 'ecrã cheio: sim' : 'ecrã cheio: não');
+    if (document.fullscreenElement) esconderDicaEcran();
+    ajustarPalco(proporcao, cobrirEcra);
+});
+
+/* Qualquer toque no telecomando serve para entrar em ecrã cheio */
+document.addEventListener('click', () => {
+    entrarEcraCheio();
     tocarTudo();
     manterAtivo();
+});
+
+document.addEventListener('keydown', () => {
+    entrarEcraCheio();
+    tocarTudo();
+    manterAtivo();
+});
+
+window.addEventListener('load', () => {
+    setTimeout(tentarEcranCheio, 800);
+    setTimeout(() => { if (!document.fullscreenElement) mostrarDicaEcran(); }, 15000);
+    setTimeout(esconderDicaEcran, 45000);   // não fica a estorvar para sempre
 });
 
 /* Vigia os vídeos: se algum parar, volta a arrancar sozinho — é o que faz
@@ -979,7 +1066,8 @@ function textoDoDiag() {
             .map((e) => e.evento + (e.extra ? ' ' + e.extra : '')).join(' · ') || 'sem eventos'),
         'versões: ' + versaoLocal() + ' · servidor ' + (versaoServidorVista || '—'),
         linhaDoDiag('clipe', clipes[0]),
-        'wake lock: ' + (bloqueioEcra ? 'ativo' : 'não'),
+        'wake lock: ' + (bloqueioEcra ? 'ativo' : 'não') +
+            ' · ecrã cheio: ' + (document.fullscreenElement ? 'sim' : 'não'),
         'ligado há ' + Math.floor((Date.now() - ARRANQUE) / 60000) + ' min' +
             ' · vigia recomeçado ' + recomecosVigia + '×',
         'relógio ' + new Date().toLocaleTimeString('pt-PT'),

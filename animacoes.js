@@ -373,7 +373,12 @@
             if (png || !logo.isConnected) return;
             global.__animFallback = true;
             registar('fallback-png');
-            [6000, 15000, 30000, 60000, 120000, 240000].forEach((ms) => depois(ms, tentarVideo));
+            [4000, 9000, 20000, 40000, 90000, 180000, 300000].forEach((ms) => depois(ms, tentarVideo));
+
+            /* Um toque no telecomando também serve: em muitos aparelhos o
+               primeiro play só é aceite depois de haver interação. */
+            document.addEventListener('pointerdown', tentarVideo);
+            document.addEventListener('keydown', tentarVideo);
 
             png = document.createElement('img');
             png.className = 'logo-original logo-a-vivo';
@@ -398,6 +403,9 @@
         function tentarVideo() {
             if (!png || !ligado) return;
 
+            /* Basta o vídeo ter dados e estar a andar: o canvas começa a
+               pintar no fotograma seguinte. Não se espera pelo primeiro
+               fotograma pintado (numa TV lenta isso pode ser tarde). */
             const pronto = () => !logo.paused && logo.readyState >= 2 && logo.videoWidth > 0;
 
             if (pronto()) return retomarCiclo();
@@ -650,10 +658,15 @@
 
         /* Se ao fim de 2,5 s a logo ainda não pintou nada (vídeo que não
            abre neste aparelho), mostra-se o PNG em vez de um espaço vazio. */
+        /* 8 s e não 2,5: numa TV, descarregar 1,2 MB e abrir o descodificador
+           pode levar bem mais que isso. Só se desiste se mesmo assim não
+           houver nada — e mesmo aí volta-se a tentar (ver mostrarPng). */
         setTimeout(() => {
             const s = superficies.find((x) => x.video === logo);
-            if (s && !s.pintou) mostrarPng();
-        }, 2500);
+            if (!s || s.pintou) return;
+            if (!logo.paused && logo.readyState >= 2 && logo.videoWidth > 0) return;
+            mostrarPng();
+        }, 8000);
 
         iniciar();
 
