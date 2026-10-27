@@ -1,22 +1,32 @@
 {
   "proporcao": 0.973,
   "zoom": 1.25,
-  "pausa": 2.4,
+  "pausa": 10,
   "transicao": {
     "duracao": 0.6,
-    "logoInicial": 2.4,
-    "esperaLogo": 2.4,
+    "logoInicial": 10,
+    "esperaLogo": 10,
     "voltarLogo": false
   },
   "clips": [
+    {
+      "id": "mrpizza-logo",
+      "nome": "MR Pizza (animada)",
+      "webm": "animacoes/mrpizza-logo.webm",
+      "miniatura": "animacoes/mrpizza-logo.png",
+      "duracao": 4,
+      "ativo": false,
+      "natural": 28.7,
+      "tema": "mrpizza"
+    },
     {
       "id": "1-balanco",
       "nome": "Balança a cabeça",
       "webm": "animacoes/1-balanco.webm",
       "miniatura": "animacoes/1-balanco.png",
       "duracao": 2.7,
-      "ativo": false,
-      "natural": 2.8,
+      "ativo": true,
+      "natural": 2.93,
       "tema": "halloween"
     },
     {
@@ -25,8 +35,8 @@
       "webm": "animacoes/2-olhos.webm",
       "miniatura": "animacoes/2-olhos.png",
       "duracao": 2.83,
-      "ativo": false,
-      "natural": 2.83,
+      "ativo": true,
+      "natural": 3.07,
       "tema": "halloween"
     },
     {
@@ -35,8 +45,8 @@
       "webm": "animacoes/3-vampiro.webm",
       "miniatura": "animacoes/3-vampiro.png",
       "duracao": 3.9,
-      "ativo": false,
-      "natural": 3.9,
+      "ativo": true,
+      "natural": 3.97,
       "tema": "halloween"
     },
     {
@@ -45,8 +55,8 @@
       "webm": "animacoes/4-capa.webm",
       "miniatura": "animacoes/4-capa.png",
       "duracao": 2.83,
-      "ativo": false,
-      "natural": 2.83,
+      "ativo": true,
+      "natural": 3.07,
       "tema": "halloween"
     },
     {
@@ -55,10 +65,10 @@
       "webm": "animacoes/5-final.webm",
       "miniatura": "animacoes/5-final.png",
       "duracao": 1.8,
-      "ativo": false,
-      "natural": 1.8,
+      "ativo": true,
+      "natural": 1.93,
       "tema": "halloween"
     }
   ],
-  "versao": "1792950952247"
+  "versao": "1793103810258"
 }

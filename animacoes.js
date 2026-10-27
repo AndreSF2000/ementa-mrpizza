@@ -15,6 +15,8 @@
    config = {
      versao: '123',
      proporcao: 0.973,
+     // id do clipe que faz de «logo original» entre as animações
+     logoBase: 'mrpizza-logo',
      transicao: { duracao: 0.6, logoInicial: 2.4, esperaLogo: 4, voltarLogo: true },
      clips: [{ id, nome, webm, duracao, ativo }]
    }
@@ -56,8 +58,16 @@
     let larguraMax = 384;
     let custoPintura = 0;
 
-    /* Apaga o fundo verde do fotograma. Os pixels que restam nas bordas
-       perdem o verde da contaminação, para não ficar um halo da cor. */
+    /* Tabela para desfazer a mistura sem uma divisão por pixel */
+    const INVERSO = new Float32Array(256);
+    for (let a = 1; a < 256; a++) INVERSO[a] = 255 / a;
+
+    /* Apaga o fundo verde do fotograma.
+
+       Um pixel de borda é uma mistura do desenho com o fundo verde. O
+       quanto de verde diz qual era a transparência, e a cor repõe-se
+       desfazendo essa mistura — assim as bordas ficam suaves e sem o
+       halo verde que sobrava quando só se limpava o canal do verde. */
     function recortarVerde(g, largura, altura) {
         const img = g.getImageData(0, 0, largura, altura);
         const d = img.data;
@@ -73,21 +83,43 @@
             const v = d[i + 1];
             const az = d[i + 2];
 
-            // só o verde vivo do fundo (o verde escuro da capa fica inteiro)
+            // Só o verde vivo do fundo conta: o desenho do chef não tem
+            // verde nenhum, por isso o que é neutro fica inteiro.
             const verde = v - (r > az ? r : az);
-            if (verde <= 24 || v <= 70) continue;
+            if (verde <= 10) continue;
 
-            const opaco = 255 - (verde - 24) * 6;
-            if (opaco <= 0) {
-                d[i + 3] = 0;
-            } else {
-                d[i + 3] = opaco;
-                d[i + 1] = r > az ? r : az;
+            if (verde >= 255) {
+                d[i + 3] = 0;       // fundo puro
+                continue;
             }
+
+            const opaco = 255 - verde;
+            const inv = INVERSO[opaco];
+            d[i + 3] = opaco;
+            d[i] = r * inv;
+            d[i + 1] = (v - (255 - opaco)) * inv;
+            d[i + 2] = az * inv;
         }
 
         g.putImageData(img, 0, 0);
         return true;
+    }
+
+    /* Rascunho: o fotograma é preparado aqui e só passa à tela visível
+       depois de recortado. Assim um fotograma recusado não apaga o que já
+       está no ecrã (nem deixa ver o verde à espera do seguinte). */
+    function rascunhoDe(tela, largura, altura) {
+        let c = tela._rascunho;
+        if (!c) {
+            c = document.createElement('canvas');
+            c._ctx = c.getContext('2d', { willReadFrequently: true });
+            tela._rascunho = c;
+        }
+        if (c.width !== largura || c.height !== altura) {
+            c.width = largura;
+            c.height = altura;
+        }
+        return c;
     }
 
     function pintarFotograma(video, tela) {
@@ -98,24 +130,27 @@
         const largura = Math.min(c, larguraMax);
         const altura = Math.max(1, Math.round(a * (largura / c)));
 
+        const inicio = performance.now();
+
+        const r = rascunhoDe(tela, largura, altura);
+        const gr = r._ctx;
+        gr.clearRect(0, 0, largura, altura);
+        gr.drawImage(video, 0, 0, largura, altura);
+        if (!recortarVerde(gr, largura, altura)) return false;
+
         if (tela.width !== largura || tela.height !== altura) {
             tela.width = largura;
             tela.height = altura;
         }
 
-        if (!tela._ctx) tela._ctx = tela.getContext('2d', { willReadFrequently: true });
+        if (!tela._ctx) tela._ctx = tela.getContext('2d');
         const g = tela._ctx;
-
-        const inicio = performance.now();
         g.clearRect(0, 0, largura, altura);
-        g.drawImage(video, 0, 0, largura, altura);
-        const bom = recortarVerde(g, largura, altura);
-        // fotograma recusado: não se mostra o verde do fundo à espera do próximo
-        if (!bom) g.clearRect(0, 0, largura, altura);
+        g.drawImage(r, 0, 0);
 
         const gasto = performance.now() - inicio;
         custoPintura = custoPintura ? custoPintura * 0.85 + gasto * 0.15 : gasto;
-        return bom;
+        return true;
     }
 
     function pintar() {
@@ -188,7 +223,7 @@
         logo.poster = LOGO;
         logo.setAttribute('muted', '');
         logo.setAttribute('playsinline', '');
-        logo.src = url(LOGO_VIDEO);
+        logo.src = enderecoDaLogo();
         host.appendChild(logo);
 
         const telaLogo = criarSuperficie(logo);
@@ -228,17 +263,23 @@
 
         function normalizar(c) {
             const t = Object.assign({}, OMISSAO, c.transicao || {});
-            const clips = (Array.isArray(c.clips) ? c.clips : [])
-                .filter((d) => d && d.ativo !== false && d.webm)
+            /* todos os clipes (mesmo os desligados: um deles pode estar a
+               fazer de logo original entre as animações) */
+            const todos = (Array.isArray(c.clips) ? c.clips : [])
+                .filter((d) => d && d.webm)
                 .map((d) => ({
                     id: d.id || d.nome || 'clipe',
                     nome: d.nome || '',
                     webm: d.webm,
+                    ativo: d.ativo !== false,
                     duracao: Math.max(0.4, Number(d.duracao) || 2),
                     natural: Math.max(0.4, Number(d.natural) || Number(d.duracao) || 2.5)
                 }));
+            const clips = todos.filter((d) => d.ativo);
 
             return {
+                logoBase: String(c.logoBase || ''),
+                todos,
                 versao: c.versao || '',
                 proporcao: Number(c.proporcao) || 0.973,
                 zoom: Math.max(0.6, Math.min(2, Number(c.zoom) || 1)),
@@ -269,6 +310,13 @@
 
         function url(base) {
             return base + (base.includes('?') ? '&' : '?') + 'v=' + encodeURIComponent(cfg.versao || '1');
+        }
+
+        /* A logo que aparece entre as animações: o clipe escolhido no
+           editor, ou o balanço gravado se não houver escolha. */
+        function enderecoDaLogo() {
+            const base = (cfg.todos || []).filter((d) => d.id === cfg.logoBase)[0];
+            return url(base ? base.webm : LOGO_VIDEO);
         }
 
         function fundo(visivel) {
@@ -509,6 +557,15 @@
             geracao++;
             ligado = true;
             limparTimers();
+
+            /* Se a logo escolhida para entre as animações mudou, troca-se
+               já o ficheiro, sem esperar por um recarregamento. */
+            const desejada = enderecoDaLogo();
+            if (logo.getAttribute('src') !== desejada) {
+                logo.src = desejada;
+                const p = logo.play();
+                if (p && p.catch) p.catch(() => {});
+            }
             camadas.forEach((v) => { v.onplaying = null; v.onerror = null; });
             pararCamadas();
             fundo(true);

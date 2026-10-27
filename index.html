@@ -63,10 +63,12 @@
     /* Camada 1 (TV2) — preçário original, sem perdas */
     #precario { object-fit: fill; }
 
-    /* Camada 2 (TV2) — logo original + animações */
+    /* Camada 2 (TV2) — logo original + animações
+       Fica por cima das decorações: é a logo da casa, não pode ficar
+       tapada pelas figuras das épocas. */
     #logotipo {
         position: absolute;
-        z-index: 2;
+        z-index: 4;
         height: auto;
         pointer-events: none;
     }
