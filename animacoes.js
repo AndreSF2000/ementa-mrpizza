@@ -423,10 +423,18 @@
         }
 
         function registar(evento, extra) {
+            const t = Math.round(performance.now());
             const l = global.__animLog;
-            if (!Array.isArray(l)) return;
-            l.push({ t: Math.round(performance.now()), evento, indice, extra: extra || '' });
-            if (l.length > 80) l.shift();
+            if (Array.isArray(l)) {
+                l.push({ t, evento, indice, extra: extra || '' });
+                if (l.length > 80) l.shift();
+            }
+            /* O mesmo, no registo geral que aparece no ecrã da TV */
+            const g = global.__logs;
+            if (Array.isArray(g)) {
+                g.push({ t, nivel: 'anim', texto: evento + (extra ? ' ' + extra : '') + (indice >= 0 ? ' #' + indice : '') });
+                if (g.length > 60) g.shift();
+            }
         }
 
         function tocar(posicao, restante, fade) {

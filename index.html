@@ -221,10 +221,12 @@
         margin: 0;
         padding: 10px 12px;
         max-width: 92vw;
+        max-height: 94vh;
+        overflow: hidden;
         border-radius: 8px;
-        background: rgba(0, 0, 0, .84);
+        background: rgba(0, 0, 0, .88);
         color: #9ef0a8;
-        font: 500 13px/1.45 ui-monospace, monospace;
+        font: 500 clamp(12px, 1.55vh, 22px)/1.45 ui-monospace, monospace;
         white-space: pre-wrap;
         pointer-events: none;
     }
@@ -282,6 +284,40 @@ let recomecosVigia = 0;
 /* Registo do que o leitor de animações vai fazendo (serve ao diagnóstico) */
 window.__animLog = [];
 window.__animFallback = false;
+
+/*
+ * Registo ao vivo para a TV.
+ *
+ * Uma TV não tem consola acessível: se algo falha, não há como ver. Isto
+ * guarda as últimas mensagens (erros do site, animações, rede) e mostra-as
+ * na caixa do diagnóstico, para se poder ler — ou fotografar — no próprio
+ * ecrã.
+ */
+window.__logs = [];
+
+function registarLog(nivel, texto) {
+    const l = window.__logs;
+    l.push({ t: Math.round(performance.now()), nivel: nivel, texto: String(texto) });
+    if (l.length > 60) l.shift();
+    return l;
+}
+
+window.addEventListener('error', (e) => {
+    const ficheiro = String(e.filename || '').split('/').pop();
+    registarLog('ERRO', (e.message || 'erro') + (ficheiro ? ' · ' + ficheiro + ':' + e.lineno : ''));
+});
+
+window.addEventListener('unhandledrejection', (e) => {
+    const r = e.reason;
+    registarLog('ERRO', 'promessa: ' + ((r && (r.message || r.name)) || r));
+});
+
+/* Os erros que o site escreve na consola também passam para aqui */
+const erroDeConsola = console.error.bind(console);
+console.error = function () {
+    try { registarLog('ERRO', [...arguments].map(String).join(' ')); } catch (e) {}
+    erroDeConsola.apply(null, arguments);
+};
 
 /* Versões para o diagnóstico e para a verificação de atualizações */
 let versaoCarregada = '';
@@ -667,6 +703,18 @@ function ecraPreco() {
 }
 
 function iniciarChef() {
+    /* A imagem do preçário pode recarregar (rede fraca na TV) e cada
+       carregamento voltava a criar outra logo e outro ciclo de animações:
+       ficavam vários a tocar uns sobre os outros, e o registo mostrava
+       «entrar» do mesmo clipe três vezes. Só existe uma. */
+    const jaExiste = document.getElementById('logotipo');
+    if (jaExiste) {
+        posicionarChef(jaExiste);
+        if (leitorLogo && typeof leitorLogo.atualizar === 'function') leitorLogo.atualizar(cfgAnim);
+        registarLog('info', 'logo já existia (reutilizada)');
+        return;
+    }
+
     const caixa = document.createElement('div');
     caixa.id = 'logotipo';
     caixa.style.left = cfg.chef.x + '%';
@@ -690,6 +738,13 @@ function iniciarChef() {
     }
 
     leitorLogo = Animacoes.criarLeitor(caixa, cfgAnim);
+    registarLog('info', 'leitor de animações criado · ' + ((cfgAnim.clips || []).length) + ' clipes');
+}
+
+function posicionarChef(caixa) {
+    caixa.style.left = cfg.chef.x + '%';
+    caixa.style.top = cfg.chef.y + '%';
+    caixa.style.width = cfg.chef.largura + '%';
 }
 
 /* ------------------------------------------------------------------
@@ -927,7 +982,13 @@ function textoDoDiag() {
         'wake lock: ' + (bloqueioEcra ? 'ativo' : 'não'),
         'ligado há ' + Math.floor((Date.now() - ARRANQUE) / 60000) + ' min' +
             ' · vigia recomeçado ' + recomecosVigia + '×',
-        'relógio ' + new Date().toLocaleTimeString('pt-PT')
+        'relógio ' + new Date().toLocaleTimeString('pt-PT'),
+        '---- registo (mais recente em baixo) ----',
+        ...((window.__logs || []).slice(-12).map((l) => {
+            const s = Math.floor(l.t / 1000);
+            const mm = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+            return mm + ' ' + l.nivel + ' ' + l.texto;
+        }))
     ].join('\n');
 }
 
