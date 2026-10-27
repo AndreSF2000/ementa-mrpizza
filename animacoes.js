@@ -35,6 +35,9 @@
        mantém uma reprodução sempre ativa no ecrã do preçário (é o que
        mantém a TV acordada, tal como o vídeo dos menus faz na TV1). */
     const LOGO_VIDEO = 'logotipo-animado.webm';
+    /* A pasta MR Pizza é a escolha de origem para a logo que aparece
+       entre as animações (a «original»). */
+    const TEMA_DA_LOGO = 'mrpizza';
 
     /* ------------------------------------------------------------------
        SUPERFÍCIE DE PINTURA — recorte do fundo verde
@@ -235,7 +238,8 @@
         };
 
         arrancarLogo();
-        logo.addEventListener('loadeddata', arrancarLogo, { once: true });
+        logo.addEventListener('loadeddata', arrancarLogo);
+        logo.addEventListener('canplay', arrancarLogo);
 
         const camadas = [camada(), camada()];
 
@@ -272,13 +276,22 @@
                     nome: d.nome || '',
                     webm: d.webm,
                     ativo: d.ativo !== false,
+                    tema: String(d.tema || '').toLowerCase(),
                     duracao: Math.max(0.4, Number(d.duracao) || 2),
                     natural: Math.max(0.4, Number(d.natural) || Number(d.duracao) || 2.5)
                 }));
             const clips = todos.filter((d) => d.ativo);
 
+            /* A logo entre animações: a escolhida no editor ou, se essa
+               já não existir, a que vive na pasta MR Pizza. */
+            let logoBase = String(c.logoBase || '');
+            if (!todos.filter((d) => d.id === logoBase).length) {
+                const padrao = todos.filter((d) => d.tema === TEMA_DA_LOGO)[0];
+                logoBase = padrao ? padrao.id : '';
+            }
+
             return {
-                logoBase: String(c.logoBase || ''),
+                logoBase,
                 todos,
                 versao: c.versao || '',
                 proporcao: Number(c.proporcao) || 0.973,
@@ -596,6 +609,21 @@
         }, 2500);
 
         iniciar();
+
+        /*
+         * O browser pode recusar o primeiro play — por exemplo quando a
+         * logo é criada ainda fora do ecrã (é o que acontecia no palco do
+         * editor, onde a logo ficava a imagem parada). Insiste-se pouco
+         * depois, na primeira interação e quando o ecrã volta.
+         */
+        const insistir = () => {
+            if (!logo.isConnected) return;
+            if (logo.paused) arrancarLogo();
+        };
+        [400, 1500, 4000, 9000].forEach((ms) => depois(ms, insistir));
+        document.addEventListener('pointerdown', insistir, { once: true });
+        document.addEventListener('keydown', insistir, { once: true });
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) insistir(); });
 
         return {
             host,
