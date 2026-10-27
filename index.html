@@ -938,6 +938,7 @@ window.addEventListener('DOMContentLoaded', arrancar);
  */
 let dicaEcran = null;
 let tentouEcranCheio = false;
+let dicasMostradas = 0;
 
 async function entrarEcraCheio() {
     if (document.fullscreenElement) return true;
@@ -960,6 +961,8 @@ async function entrarEcraCheio() {
 
 function mostrarDicaEcran() {
     if (dicaEcran || document.fullscreenElement) return;
+    if (dicasMostradas >= 3) return;   // não anda a insistir para sempre
+    dicasMostradas++;
     dicaEcran = document.createElement('div');
     dicaEcran.id = 'dica-ecran';
     dicaEcran.textContent = 'Ecrã inteiro: carrega OK no telecomando';
@@ -1001,7 +1004,13 @@ document.addEventListener('keydown', () => {
 window.addEventListener('load', () => {
     setTimeout(tentarEcranCheio, 800);
     setTimeout(() => { if (!document.fullscreenElement) mostrarDicaEcran(); }, 15000);
-    setTimeout(esconderDicaEcran, 45000);   // não fica a estorvar para sempre
+    setTimeout(esconderDicaEcran, 45000);    // não fica a estorvar para sempre
+
+    /* Se a dica desaparecer sem o ecrã cheio ter entrado, volta a lembrar
+       (duas vezes, no máximo), porque sem ela não há como saber o que fazer. */
+    setInterval(() => {
+        if (!document.fullscreenElement) mostrarDicaEcran();
+    }, 90000);
 });
 
 /* Vigia os vídeos: se algum parar, volta a arrancar sozinho — é o que faz
