@@ -16,7 +16,7 @@
       "webm": "animacoes/mrpizza-logo.webm",
       "miniatura": "animacoes/mrpizza-logo.png",
       "duracao": 4,
-      "ativo": false,
+      "ativo": true,
       "natural": 28.7,
       "tema": "mrpizza"
     },
@@ -26,7 +26,7 @@
       "webm": "animacoes/1-balanco.webm",
       "miniatura": "animacoes/1-balanco.png",
       "duracao": 2.7,
-      "ativo": true,
+      "ativo": false,
       "natural": 2.93,
       "tema": "halloween"
     },
@@ -36,7 +36,7 @@
       "webm": "animacoes/2-olhos.webm",
       "miniatura": "animacoes/2-olhos.png",
       "duracao": 2.8,
-      "ativo": true,
+      "ativo": false,
       "natural": 3.07,
       "tema": "halloween"
     },
@@ -46,7 +46,7 @@
       "webm": "animacoes/3-vampiro.webm",
       "miniatura": "animacoes/3-vampiro.png",
       "duracao": 3.9,
-      "ativo": true,
+      "ativo": false,
       "natural": 3.97,
       "tema": "halloween"
     },
@@ -56,7 +56,7 @@
       "webm": "animacoes/4-capa.webm",
       "miniatura": "animacoes/4-capa.png",
       "duracao": 2.8,
-      "ativo": true,
+      "ativo": false,
       "natural": 3.07,
       "tema": "halloween"
     },
@@ -66,10 +66,10 @@
       "webm": "animacoes/5-final.webm",
       "miniatura": "animacoes/5-final.png",
       "duracao": 1.8,
-      "ativo": true,
+      "ativo": false,
       "natural": 1.93,
       "tema": "halloween"
     }
   ],
-  "versao": "1793114720591"
+  "versao": "1793115663851"
 }
