@@ -58,6 +58,7 @@
     const superficies = [];
     let aPintar = false;
     let ultimoPintado = 0;
+    let fotogramas = 0;   // contador para o diagnóstico da TV
     let larguraMax = 384;
     let custoPintura = 0;
 
@@ -175,7 +176,14 @@
             if (s.tela.style.opacity === '0') continue;
             if (!pintarFotograma(s.video, s.tela)) continue;
             s.pintou = true;
+            fotogramas++;
         }
+
+        global.__animPintura = {
+            fotogramas,
+            largura: larguraMax,
+            custo: Math.round(custoPintura)
+        };
 
         // aparelho lento: baixa a resolução em vez de deixar o vídeo aos saltos
         if (custoPintura > 42 && larguraMax > 192) larguraMax -= 64;
@@ -355,9 +363,17 @@
 
         /* Rede de segurança: se o aparelho não descodificar o vídeo da
            logo, fica a logo em PNG com o balanço em CSS — nunca um espaço
-           vazio nem um retângulo opaco em frente da ementa. */
+           vazio nem um retângulo opaco em frente da ementa.
+
+           Isto NÃO é definitivo: uma TV lenta pode levar mais de 2,5 s a
+           abrir o ficheiro, e antes ficava em PNG para sempre (a logo
+           aparecia, mas sem animação nenhuma). Agora volta-se a tentar e,
+           quando o vídeo arranca, o ciclo retoma do princípio. */
         function mostrarPng() {
             if (png || !logo.isConnected) return;
+            global.__animFallback = true;
+            registar('fallback-png');
+            [6000, 15000, 30000, 60000, 120000, 240000].forEach((ms) => depois(ms, tentarVideo));
 
             png = document.createElement('img');
             png.className = 'logo-original logo-a-vivo';
@@ -376,6 +392,29 @@
             limparTimers();
             indice = -1;
             avisar(-1, null);
+        }
+
+        /* Volta a tentar o vídeo da logo depois de se ter mostrado o PNG. */
+        function tentarVideo() {
+            if (!png || !ligado) return;
+
+            const pronto = () => !logo.paused && logo.readyState >= 2 && logo.videoWidth > 0;
+
+            if (pronto()) return retomarCiclo();
+
+            const p = logo.play();
+            if (p && p.catch) p.catch(() => {});
+            depois(1500, () => { if (png && ligado && pronto()) retomarCiclo(); });
+        }
+
+        function retomarCiclo() {
+            if (!png) return;
+            png.remove();
+            png = null;
+            global.__animFallback = false;
+            telaLogo.style.opacity = '1';
+            registar('retomar-video');
+            iniciar();
         }
 
         function avisar(i, clip) {

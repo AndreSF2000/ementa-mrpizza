@@ -271,13 +271,21 @@
 /* ------------------------------------------------------------------
    CONFIGURAÇÃO
    ------------------------------------------------------------------ */
-const VERSAO = '2026-10-25b';
+const VERSAO = '2026-10-27a';
 
 /* Desde quando o ecrã está ligado nesta página e quantas vezes foi preciso
    voltar a arrancar a camada anti-standby. Serve para responder à única
    pergunta que importa no restaurante: «há quanto tempo está a aguentar?» */
 const ARRANQUE = Date.now();
 let recomecosVigia = 0;
+
+/* Registo do que o leitor de animações vai fazendo (serve ao diagnóstico) */
+window.__animLog = [];
+window.__animFallback = false;
+
+/* Versões para o diagnóstico e para a verificação de atualizações */
+let versaoCarregada = '';
+let versaoServidorVista = '';
 
 const ASSETS = {
     menus: 'menus-mr-ermesinde-out-2026.mp4',
@@ -294,7 +302,7 @@ const ASSETS = {
 const CHEF_OMISSAO = { x: 6.6, y: 59, largura: 12 };
 
 /* Atualizações automáticas */
-const INTERVALO_VERIFICACAO = 20000;
+const INTERVALO_VERIFICACAO = 30000;
 const SEGUNDOS_AVISO = 5;
 
 /* ------------------------------------------------------------------ */
@@ -905,6 +913,16 @@ function textoDoDiag() {
             ? linhaDoDiag('vigia', document.getElementById('vigia'))
             : 'vigia: desligado (liga com ?vigia=1)',
         linhaDoDiag('logo', document.querySelector('video.logo-original')),
+        'logo em uso: ' + (window.__animFallback
+            ? 'PNG de reserva (o vídeo não abriu)'
+            : 'vídeo animado'),
+        'pintura: ' + (window.__animPintura
+            ? window.__animPintura.fotogramas + ' fotogramas · ' +
+              window.__animPintura.largura + 'px · ' + window.__animPintura.custo + ' ms'
+            : 'ainda nada'),
+        'eventos: ' + ((window.__animLog || []).slice(-3)
+            .map((e) => e.evento + (e.extra ? ' ' + e.extra : '')).join(' · ') || 'sem eventos'),
+        'versões: ' + versaoLocal() + ' · servidor ' + (versaoServidorVista || '—'),
         linhaDoDiag('clipe', clipes[0]),
         'wake lock: ' + (bloqueioEcra ? 'ativo' : 'não'),
         'ligado há ' + Math.floor((Date.now() - ARRANQUE) / 60000) + ' min' +
@@ -938,31 +956,54 @@ document.addEventListener('keydown', (e) => {
    Compara o Last-Modified do HTML e do decoracoes.json. Se mudarem,
    avisa 5 s e recarrega.
    ------------------------------------------------------------------ */
-let marcaServidor = null;
+/*
+ * A comparação é feita pelos números de versão que o editor grava dentro
+ * dos dois JSON, e não pelos cabeçalhos HTTP.
+ *
+ * Antes comparava-se o Last-Modified/ETag de quatro ficheiros: bastava um
+ * pedido falhar na rede da TV para a «marca» mudar e a página recarregar
+ * sem ninguém pedir — e, como o pedido voltava a falhar, ficava em ciclo
+ * de 20 em 20 segundos, a cortar as animações a meio.
+ *
+ * Regras de agora: só se decide com os dois ficheiros lidos; o valor novo
+ * tem de aparecer duas vezes seguidas; e no máximo um recarregamento
+ * automático de 10 em 10 minutos.
+ */
+let confirmacoes = 0;
 let aAtualizar = false;
+let ultimaTentativa = 0;
+const CHAVE_ATUALIZOU = 'mrpizza_ultima_atualizacao';
+const ESPERA_ENTRE_ATUALIZACOES = 10 * 60 * 1000;
 
-async function marcaDe(url) {
-    try {
-        const resposta = await fetch(url + (url.includes('?') ? '&' : '?') + 'ver=' + Date.now(), {
-            method: 'HEAD',
-            cache: 'no-store'
-        });
-        if (!resposta.ok) return null;
-        return resposta.headers.get('last-modified') || resposta.headers.get('etag') || '';
-    } catch (e) {
-        return null;
-    }
+function versaoLocal() {
+    return String((cfgAnim && cfgAnim.versao) || '') + '|' + String((cfg && cfg.versao) || '');
 }
 
-async function marcaAtual() {
-    const [html, config, animacoes, efeitos] = await Promise.all([
-        marcaDe(location.pathname),
-        marcaDe(ASSETS.config),
-        marcaDe(ASSETS.animacoes),
-        marcaDe(ASSETS.efeitos)
-    ]);
-    if (!html && !config && !animacoes && !efeitos) return null;
-    return (html || '') + '|' + (config || '') + '|' + (animacoes || '') + '|' + (efeitos || '');
+async function versaoNoServidor() {
+    const ler = (url) => fetch(url + '?ver=' + Date.now(), { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null);
+
+    const [a, d] = await Promise.all([ler(ASSETS.animacoes), ler(ASSETS.config)]);
+    if (!a || !d) return null;   // rede falhou: não se decide nada
+    return String(a.versao || '') + '|' + String(d.versao || '');
+}
+
+function podeAtualizarAgora() {
+    const agora = Date.now();
+    let ultima = ultimaTentativa;
+    try { ultima = Math.max(ultima, Number(localStorage.getItem(CHAVE_ATUALIZOU) || 0)); } catch (e) {}
+    if (agora - ultima < ESPERA_ENTRE_ATUALIZACOES) return false;
+
+    ultimaTentativa = agora;
+    try { localStorage.setItem(CHAVE_ATUALIZOU, String(agora)); } catch (e) {}
+    return true;
+}
+
+function recarregarComVersaoNova() {
+    const u = new URL(location.href);
+    u.searchParams.set('v', Date.now());
+    location.replace(u.toString());
 }
 
 function avisarAtualizacao() {
@@ -981,21 +1022,32 @@ function avisarAtualizacao() {
         if (numero) numero.textContent = restantes > 0 ? restantes : '…';
         if (restantes <= 0) {
             clearInterval(contador);
-            location.reload();
+            recarregarComVersaoNova();
         }
     }, 1000);
 }
 
 async function verificarAtualizacao() {
     if (aAtualizar) return;
-    const marca = await marcaAtual();
-    if (!marca) return;
-    if (marcaServidor === null) { marcaServidor = marca; return; }
-    if (marca !== marcaServidor) avisarAtualizacao();
+    /* com o diagnóstico aberto não se recarrega: é preciso tempo para ler */
+    if (caixaDiag && caixaDiag.style.display !== 'none') return;
+
+    const v = await versaoNoServidor();
+    if (!v) return;
+    versaoServidorVista = v;
+
+    if (v === versaoCarregada) { confirmacoes = 0; return; }
+
+    /* primeira vez que se vê este valor: espera-se a confirmação seguinte */
+    if (confirmacoes === 0) { confirmacoes = 1; return; }
+
+    if (!podeAtualizarAgora()) return;
+    avisarAtualizacao();
 }
 
 function iniciarVerificacaoAtualizacoes() {
-    marcaAtual().then((m) => { marcaServidor = m; });
+    versaoCarregada = versaoLocal();
+    versaoNoServidor().then((v) => { if (v) versaoServidorVista = v; });
     setInterval(verificarAtualizacao, INTERVALO_VERIFICACAO);
 }
 </script>
