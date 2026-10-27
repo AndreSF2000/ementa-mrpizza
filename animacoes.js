@@ -373,18 +373,17 @@
             if (png || !logo.isConnected) return;
             global.__animFallback = true;
             registar('fallback-png');
-            [4000, 9000, 20000, 40000, 90000, 180000, 300000].forEach((ms) => depois(ms, tentarVideo));
-
-            /* Um toque no telecomando também serve: em muitos aparelhos o
-               primeiro play só é aceite depois de haver interação. */
-            document.addEventListener('pointerdown', tentarVideo);
-            document.addEventListener('keydown', tentarVideo);
 
             png = document.createElement('img');
             png.className = 'logo-original logo-a-vivo';
             png.src = LOGO;
             png.style.transition = 'opacity .6s ease-in-out';
-            png.style.opacity = telaLogo.style.opacity === '0' ? '0' : '1';
+            /* A reserva está SEMPRE visível. Antes herdava a opacidade do
+               canvas da logo — e, se o fallback acontecesse no instante em
+               que a logo estava escondida para entrar um clipe, o PNG
+               também ficava com opacidade 0 e o ecrã ficava SEM logo
+               nenhuma (nem a original nem as animadas). */
+            png.style.opacity = '1';
             host.insertBefore(png, logo);
 
             telaLogo.style.opacity = '0';
@@ -397,6 +396,16 @@
             limparTimers();
             indice = -1;
             avisar(-1, null);
+
+            /* Agendar DEPOIS de limparTimers: antes ficava antes da limpeza
+               e os temporizadores de recuperação eram cancelados na hora,
+               por isso o PNG nunca voltava ao vídeo. */
+            [4000, 9000, 20000, 40000, 90000, 180000, 300000].forEach((ms) => depois(ms, tentarVideo));
+
+            /* Um toque no telecomando também serve: em muitos aparelhos o
+               primeiro play só é aceite depois de haver interação. */
+            document.addEventListener('pointerdown', tentarVideo);
+            document.addEventListener('keydown', tentarVideo);
         }
 
         /* Volta a tentar o vídeo da logo depois de se ter mostrado o PNG. */

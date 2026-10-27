@@ -948,6 +948,7 @@ async function entrarEcraCheio() {
         if (el.requestFullscreen) await el.requestFullscreen({ navigationUI: 'hide' });
         else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
     } catch (e) {
+        registarLog('info', 'ecrã cheio recusado · ' + ((e && e.message) || e));
         return false;
     }
 
@@ -1003,14 +1004,10 @@ document.addEventListener('keydown', () => {
 
 window.addEventListener('load', () => {
     setTimeout(tentarEcranCheio, 800);
-    setTimeout(() => { if (!document.fullscreenElement) mostrarDicaEcran(); }, 15000);
-    setTimeout(esconderDicaEcran, 45000);    // não fica a estorvar para sempre
 
-    /* Se a dica desaparecer sem o ecrã cheio ter entrado, volta a lembrar
-       (duas vezes, no máximo), porque sem ela não há como saber o que fazer. */
-    setInterval(() => {
-        if (!document.fullscreenElement) mostrarDicaEcran();
-    }, 90000);
+    /* A dica fica até o ecrã cheio entrar — sem isso não há como saber
+       que basta um OK no telecomando. */
+    setTimeout(() => { if (!document.fullscreenElement) mostrarDicaEcran(); }, 15000);
 });
 
 /* Vigia os vídeos: se algum parar, volta a arrancar sozinho — é o que faz
