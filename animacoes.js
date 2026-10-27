@@ -283,6 +283,9 @@
                     id: d.id || d.nome || 'clipe',
                     nome: d.nome || '',
                     webm: d.webm,
+                    /* A mesma animação em imagem animada (WebP), para os
+                       aparelhos que não sabem desenhar vídeo num canvas. */
+                    webp: d.webp || String(d.webm || '').replace(/\.webm$/i, '.webp'),
                     ativo: d.ativo !== false,
                     tema: String(d.tema || '').toLowerCase(),
                     duracao: Math.max(0.4, Number(d.duracao) || 2),
@@ -434,6 +437,135 @@
             iniciar();
         }
 
+        /* ------------------------------------------------------------------
+           MODO IMAGEM
+           ------------------------------------------------------------------
+           Algumas TVs (LG, por exemplo) não conseguem desenhar um vídeo num
+           canvas: o pedido não dá erro, simplesmente não sai nada — 0
+           fotogramas. Aqui as mesmas animações são imagens animadas (WebP)
+           com transparência a sério, que qualquer browser sabe pintar.
+
+           A logo original, nesse modo, é o PNG com o balanço em CSS (a
+           mesma animação suave), porque a versão em imagem dela teria
+           dezenas de megabytes.
+           ------------------------------------------------------------------ */
+        let modoImagem = false;
+        let base = null;
+        let camadasImg = [];
+
+        function esbaterImg(el, visivel) {
+            if (!el) return;
+            const d = cfg.transicao.duracao;
+            el.style.transition = d > 0 ? 'opacity ' + d + 's ease-in-out' : 'none';
+            el.style.opacity = visivel ? '1' : '0';
+        }
+
+        function criarCamadaImg() {
+            const img = document.createElement('img');
+            img.className = 'clipe-logo';
+            img.alt = '';
+            img.style.position = 'absolute';
+            img.style.inset = '0';
+            img.style.width = '100%';
+            img.style.height = '100%';
+            img.style.objectFit = 'contain';
+            img.style.opacity = '0';
+            img.style.pointerEvents = 'none';
+            img.style.transformOrigin = '50% 48.5%';
+            img.style.transform = cfg.zoom === 1 ? '' : 'scale(' + cfg.zoom + ')';
+            host.appendChild(img);
+            return img;
+        }
+
+        function entrarModoImagem(motivo) {
+            if (modoImagem || !ligado) return;
+            modoImagem = true;
+            global.__animModo = 'imagem';
+            global.__animFallback = false;
+            registar('modo-imagem', motivo || '');
+
+            geracao++;
+            limparTimers();
+
+            if (png) { try { png.remove(); } catch (e) {} png = null; }
+            superficies.splice(0).forEach((s) => {
+                try { s.video.pause(); } catch (e) {}
+                try { s.tela.remove(); } catch (e) {}
+                try { s.video.remove(); } catch (e) {}
+            });
+            camadas.forEach((v) => { try { v.pause(); } catch (e) {} try { v.remove(); } catch (e) {} });
+            try { logo.remove(); } catch (e) {}
+
+            base = document.createElement('img');
+            base.className = 'logo-original logo-a-vivo';
+            base.alt = '';
+            base.src = LOGO;
+            base.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;' +
+                'object-fit:contain;opacity:1;transition:opacity .6s ease-in-out;pointer-events:none';
+            host.appendChild(base);
+
+            camadasImg = [criarCamadaImg(), criarCamadaImg()];
+            indice = -1;
+            avisar(-1, null);
+
+            depois(cfg.transicao.logoInicial * 1000, () => passoImagem(0));
+        }
+
+        function passoImagem(i) {
+            if (!ligado || !modoImagem) return;
+
+            if (i >= cfg.clips.length) {
+                esbaterImg(base, true);
+                camadasImg.forEach((c) => esbaterImg(c, false));
+                indice = -1;
+                avisar(-1, null);
+                depois(cfg.pausa * 1000, () => passoImagem(0));
+                return;
+            }
+
+            const clip = cfg.clips[i];
+            const camada = camadasImg[i % 2];
+            const g = geracao;
+            indice = i;
+
+            const entrar = () => {
+                if (!ligado || !modoImagem || g !== geracao) return;
+                registar('imagem', clip.id);
+                esbaterImg(camada, true);
+                esbaterImg(base, false);
+                avisar(i, clip);
+
+                depois(Math.max(0.6, clip.duracao) * 1000, () => {
+                    if (!ligado || g !== geracao) return;
+                    esbaterImg(camada, false);
+                    esbaterImg(base, true);
+                    indice = -1;
+                    avisar(-1, null);
+                    depois(cfg.pausa * 1000, () => {
+                        if (g !== geracao) return;
+                        passoImagem(i + 1);
+                    });
+                });
+            };
+
+            /* Só uma entrada por clipe: o onload e o «já está em cache»
+               podiam disparar os dois e o clipe aparecia duas vezes. */
+            let marcado = false;
+            const marcar = () => { if (marcado) return; marcado = true; depois(120, entrar); };
+
+            camada.onload = marcar;
+            camada.onerror = () => {
+                registar('imagem-falhou', clip.id);
+                passoImagem(i + 1);
+            };
+            camada.src = url(clip.webp);
+            if (camada.complete && camada.naturalWidth) marcar();
+
+            /* A seguinte já vai sendo descarregada enquanto esta passa */
+            const seguinte = cfg.clips[i + 1];
+            if (seguinte) { const pre = new Image(); pre.src = url(seguinte.webp); }
+        }
+
         function avisar(i, clip) {
             if (typeof op.aoMudar !== 'function') return;
             try { op.aoMudar(i, clip); } catch (e) {}
@@ -456,6 +588,7 @@
 
         function tocar(posicao, restante, fade) {
             if (!ligado) return;
+            if (modoImagem) return;   // o ciclo é feito por imagens
             if (png) { fundo(true); return; }
             if (!cfg.clips.length) { fundo(true); return; }
 
@@ -630,6 +763,7 @@
         }
 
         function iniciar() {
+            if (modoImagem) return;
             registar('iniciar');
             geracao++;
             ligado = true;
@@ -679,6 +813,21 @@
 
         iniciar();
 
+        /* Se for pedido, começa já em modo imagem (para testar na TV) */
+        if (op.modoImagem) depois(200, () => entrarModoImagem('pedido'));
+
+        /*
+         * Rede de segurança para as TVs que não pintam vídeo no canvas:
+         * se ao fim de 12 s não houver um único fotograma desenhado, passa
+         * a usar as imagens animadas — que qualquer browser pinta.
+         */
+        depois(12000, () => {
+            if (modoImagem || !ligado) return;
+            const f = (global.__animPintura || {}).fotogramas || 0;
+            if (f > 0) return;
+            entrarModoImagem('canvas sem fotogramas');
+        });
+
         /*
          * O browser pode recusar o primeiro play — por exemplo quando a
          * logo é criada ainda fora do ecrã (é o que acontecia no palco do
@@ -699,7 +848,7 @@
             parar,
             reiniciar: iniciar,
             atualizar: (novo) => { cfg = normalizar(novo || {}); iniciar(); },
-            estado: () => ({ indice, total: cfg.clips.length, ligado }),
+            estado: () => ({ indice, total: cfg.clips.length, ligado, modo: modoImagem ? 'imagem' : 'video' }),
             config: () => cfg
         };
     }

@@ -753,7 +753,9 @@ function iniciarChef() {
         return;
     }
 
-    leitorLogo = Animacoes.criarLeitor(caixa, cfgAnim);
+    leitorLogo = Animacoes.criarLeitor(caixa, cfgAnim, {
+        modoImagem: new URLSearchParams(location.search).get('imagem') === '1'
+    });
     registarLog('info', 'leitor de animações criado · ' + ((cfgAnim.clips || []).length) + ' clipes');
 }
 
@@ -1061,9 +1063,10 @@ function textoDoDiag() {
             ? linhaDoDiag('vigia', document.getElementById('vigia'))
             : 'vigia: desligado (liga com ?vigia=1)',
         linhaDoDiag('logo', document.querySelector('video.logo-original')),
-        'logo em uso: ' + (window.__animFallback
-            ? 'PNG de reserva (o vídeo não abriu)'
-            : 'vídeo animado'),
+        'logo em uso: ' + (window.__animModo === 'imagem'
+            ? 'imagens animadas (WebP)'
+            : (window.__animFallback ? 'PNG de reserva (o vídeo não abriu)' : 'vídeo animado')),
+        'modo da logo: ' + (window.__animModo || 'vídeo (canvas)'),
         'pintura: ' + (window.__animPintura
             ? window.__animPintura.fotogramas + ' fotogramas · ' +
               window.__animPintura.largura + 'px · ' + window.__animPintura.custo + ' ms'
