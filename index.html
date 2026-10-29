@@ -100,32 +100,19 @@
     }
 
     /*
-     * Camada anti-standby (TV2) — vai ACIMA de tudo, dentro do #ecra.
+     * Camada anti-standby (TV2) — vai POR BAIXO do PNG do preçário.
      *
      * A TV dos menus nunca entra em suspensão porque tem um vídeo H.264 em
-     * ecrã inteiro a tocar; a dos preços passa a ter as mesmas condições:
-     * vigia.mp4 é H.264, 1920x1080, 30 fps, sem som, em ciclo.
+     * ecrã inteiro a tocar; a dos preços passa a ter as mesmas condições.
+     * vigia.mp4 é o próprio preçário em vídeo (1920x1080, em ciclo); o PNG
+     * sem perdas fica por cima, por isso a nitidez não muda.
      *
-     * ATENÇÃO — a TV desenha o vídeo numa camada própria e ignora o CSS
-     * (opacidade e «mix-blend-mode»). Com a camada a 100% e uma soma de
-     * cores que a TV não faz, o filme preto ficou POR CIMA de tudo e o
-     * ecrã ficou preto. Por isso: 2% de opacidade, sem somas de cor, e
-     * desligada por omissão — liga-se com ?vigia=1 para testar.
-     *
-     * Com 2% nem se nota o preto (medido: no máximo 2% mais escuro num
-     * ponto), mas a TV vê um vídeo a tocar por cima de todas as camadas.
+     * Antes estava por cima de tudo com um vídeo preto: a TV desenha os
+     * vídeos numa camada própria e o ecrã ficou preto. Agora, mesmo que a
+     * TV ponha o vídeo à frente, o que aparece é o preçário.
      */
-    #vigia {
-        position: absolute;
-        inset: 0;
-        z-index: 50;
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        opacity: .02;
-        pointer-events: none;
-        transform: translateZ(0);
-    }
+    #vigia { z-index: 0; pointer-events: none; }
+    #precario { z-index: 1; }
 
     /* Camada 3 — decorações (Halloween, etc.) */
     .decoracao {
@@ -289,7 +276,7 @@
 /* ------------------------------------------------------------------
    CONFIGURAÇÃO
    ------------------------------------------------------------------ */
-const VERSAO = '2026-10-27a';
+const VERSAO = '2026-10-29a';
 
 /* Desde quando o ecrã está ligado nesta página e quantas vezes foi preciso
    voltar a arrancar a camada anti-standby. Serve para responder à única
@@ -693,7 +680,8 @@ function ecraPreco() {
 
     img.addEventListener('load', async () => {
         ajustarPalco(img.naturalWidth / img.naturalHeight, false);
-        palco.appendChild(img);
+        /* ?vigia=video: mostra só o vídeo (último recurso, se a TV ainda apagar) */
+        if (modoVigia() !== 'video') palco.appendChild(img);
 
         // O decode() pode nunca resolver (browser de TV, poupança de energia).
         // Não vale a pena ficar à espera dele para arrancar a logo.
@@ -767,18 +755,17 @@ function posicionarChef(caixa) {
 
 /* ------------------------------------------------------------------
    Camada anti-standby (TV2)
-   Um vídeo H.264 de 1920x1080 esticado em ecrã inteiro por cima de todas
-   as camadas, com 2% de opacidade: não se vê, mas a TV vê um vídeo a
-   tocar. Ficou desligada por omissão porque na TV, com a camada a 100% e
-   uma soma de cores, o ecrã ficou preto (a TV desenha vídeos à parte do
-   CSS). Liga-se com ?vigia=1. Se a TV apagar por regra do próprio
-   firmware (temporizador interno, modo hotel), nenhum site o impede.
+   O preçário em vídeo H.264, a tocar em ciclo por baixo do PNG: é a
+   mesma condição da TV dos menus (que nunca apaga). Ligada por omissão;
+   ?vigia=0 desliga. Se a TV apagar por regra do próprio firmware
+   (temporizador interno, modo hotel), nenhum site o impede.
    ------------------------------------------------------------------ */
 function iniciarVigia() {
     if (document.getElementById('vigia')) return;
 
     const v = document.createElement('video');
     v.id = 'vigia';
+    v.className = 'media';
     v.muted = true;
     v.defaultMuted = true;
     v.loop = true;
@@ -791,7 +778,7 @@ function iniciarVigia() {
     v.disablePictureInPicture = true;
     v.src = comVersao(ASSETS.vigia);
 
-    document.getElementById('ecra').appendChild(v);
+    palco.insertBefore(v, palco.firstChild);
 
     /* O primeiro play() costuma ser recusado (o elemento acabou de nascer),
        por isso insiste-se nos primeiros segundos e sempre que a TV acorda. */
@@ -803,11 +790,15 @@ function iniciarVigia() {
 }
 
 /* Interruptores de teste, para se perceber na TV o que causa um problema:
-   ?vigia=1  — liga a camada anti-standby
-   ?semanim=1 — desliga as animações (fica só a logo simples) */
+   ?vigia=0     — desliga a camada anti-standby
+   ?vigia=video — só o vídeo, sem o PNG por cima
+   ?semanim=1   — desliga as animações (fica só a logo simples) */
+function modoVigia() {
+    return (new URLSearchParams(location.search).get('vigia') || '').toLowerCase();
+}
+
 function quereVigia() {
-    const p = new URLSearchParams(location.search);
-    return p.has('vigia') && p.get('vigia') !== '0';
+    return modoVigia() !== '0';
 }
 
 function semAnimacoes() {
@@ -1055,13 +1046,15 @@ function textoDoDiag() {
 
     return [
         'MR. PIZZA · diagnóstico',
-        'versão ' + VERSAO + ' · ecrã ' + MODO + ' · ' + innerWidth + 'x' + innerHeight,
+        'versão ' + VERSAO + ' · ecrã ' + MODO + ' · ' + innerWidth + 'x' + innerHeight +
+            ' · dpr ' + (window.devicePixelRatio || 1) +
+            ' (' + Math.round(innerWidth * (window.devicePixelRatio || 1)) + 'px reais)',
         'animações: ' + (typeof Animacoes === 'object' ? 'sim' : 'NÃO (animacoes.js)') +
             ' · clipes na lista: ' + ((cfgAnim && cfgAnim.clips) || []).length,
         'telas a pintar: ' + aPintar + ' · página: ' + document.visibilityState,
         document.getElementById('vigia')
             ? linhaDoDiag('vigia', document.getElementById('vigia'))
-            : 'vigia: desligado (liga com ?vigia=1)',
+            : 'vigia: desligado (?vigia=0)',
         linhaDoDiag('logo', document.querySelector('video.logo-original')),
         'logo em uso: ' + (window.__animModo === 'imagem'
             ? 'imagens animadas (WebP)'
