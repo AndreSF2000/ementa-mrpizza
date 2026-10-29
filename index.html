@@ -271,13 +271,13 @@
 </div>
 
 <!-- ?v= obriga a TV a largar a cópia antiga em cache; sobe com VERSAO -->
-<script src="efeitos.js?v=2026-10-29b"></script>
-<script src="animacoes.js?v=2026-10-29b"></script>
+<script src="efeitos.js?v=2026-10-29c"></script>
+<script src="animacoes.js?v=2026-10-29c"></script>
 <script>
 /* ------------------------------------------------------------------
    CONFIGURAÇÃO
    ------------------------------------------------------------------ */
-const VERSAO = '2026-10-29b';
+const VERSAO = '2026-10-29c';
 
 /* Desde quando o ecrã está ligado nesta página e quantas vezes foi preciso
    voltar a arrancar a camada anti-standby. Serve para responder à única
@@ -491,7 +491,12 @@ async function carregarAnimacoes() {
             versao: dados.versao || '',
             proporcao: Number(dados.proporcao) || .973,
             transicao: Object.assign({ duracao: .6, logoInicial: 2.4, esperaLogo: 4, voltarLogo: true }, dados.transicao || {}),
-            clips: Array.isArray(dados.clips) ? dados.clips : []
+            clips: Array.isArray(dados.clips) ? dados.clips : [],
+            /* sem estes três, a TV ignorava o Tamanho, a Pausa e a logo
+               entre animações escolhidos no editor */
+            zoom: dados.zoom,
+            pausa: dados.pausa,
+            logoBase: dados.logoBase
         };
     } catch (e) {
         cfgAnim = { versao: '', proporcao: .973, transicao: { duracao: .6, logoInicial: 2.4, esperaLogo: 4, voltarLogo: true }, clips: [] };

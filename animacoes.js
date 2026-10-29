@@ -504,27 +504,57 @@
             return img;
         }
 
-        /* Põe na base a logo animada; só troca depois de o ficheiro chegar */
+        /* A logo parada entre animações é o ÚLTIMO fotograma da logo animada
+           (<id>-fim.png, feito pelo gerar-webp.js), com o mesmo enquadramento:
+           quando a animação acaba, a troca para a imagem parada não se nota
+           e o tamanho nunca muda. O PNG antigo só fica se esse faltar. */
         function porBase() {
             const clip = clipeDaLogo();
-            const quer = clip ? url(clip.webp) : '';
+            const quer = clip ? url(clip.webp.replace(/\.webp$/i, '-fim.png')) : LOGO;
             if (base._quer === quer) return;
             base._quer = quer;
-
-            base.className = 'logo-original logo-a-vivo';
-            base.src = LOGO;
-            global.__animBase = 'png';
-            if (!quer) return;
-
-            const pre = new Image();
-            pre.onload = () => {
-                if (base._quer !== quer) return;
-                base.className = 'logo-original';   // a animação já traz o movimento
-                base.src = quer;
-                global.__animBase = 'webp';
+            // «Logo original a balançar» (sem logo animada escolhida): o PNG com balanço
+            base.className = clip ? 'logo-original' : 'logo-original logo-a-vivo';
+            base.onerror = () => {
+                if (base.src.indexOf(LOGO) >= 0) return;
+                registar('base-falhou', clip ? clip.id : '');
+                base.src = LOGO;
+                global.__animBase = 'png';
             };
-            pre.onerror = () => registar('base-falhou', clip.id);
-            pre.src = quer;
+            base.src = quer;
+            global.__animBase = clip ? 'parada' : 'png';
+        }
+
+        /* Cada vez que um clipe entra, recebe um endereço novo (blob) do
+           mesmo ficheiro: a animação começa sempre no primeiro fotograma e,
+           como o WebP toca uma vez só, fica parada no último. Com o mesmo
+           endereço, o browser continuava a animação onde ela tinha ficado.
+           O ficheiro descarrega-se uma vez só. */
+        const ficheiros = {};
+
+        function enderecoNovo(clip) {
+            const u = url(clip.webp);
+            if (typeof fetch !== 'function' || !global.URL || !URL.createObjectURL) return Promise.resolve(u);
+            if (!ficheiros[u]) {
+                ficheiros[u] = fetch(u).then((r) => {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.blob();
+                });
+                ficheiros[u].catch(() => { delete ficheiros[u]; });
+            }
+            return ficheiros[u].then((b) => URL.createObjectURL(b), () => u);
+        }
+
+        function largar(camada) {
+            const s = camada.getAttribute('src') || '';
+            camada.removeAttribute('src');
+            if (s.indexOf('blob:') === 0) URL.revokeObjectURL(s);
+        }
+
+        /* A logo da casa não é ampliada (fica do tamanho da logo parada);
+           o «Tamanho» do editor é para as animações das épocas. */
+        function escalaDe(clip) {
+            return clip.id === cfg.logoBase ? 1 : cfg.zoom;
         }
 
         function entrarModoImagem(motivo) {
@@ -564,15 +594,28 @@
             if (ligado) iniciar();
         }
 
+        /* Transição: a logo da casa entra e sai só com esbatimento (o último
+           fotograma é igual à logo parada, a troca fica invisível); as
+           animações das épocas entram com um pequeno «crescer» suave, em vez
+           de dois desenhos diferentes meio transparentes um sobre o outro. */
+        function transicaoImg(el, visivel, escala, crescer) {
+            const d = cfg.transicao.duracao;
+            const m = Math.max(0.5, d * 1.4);
+            el.style.transition = d > 0
+                ? 'opacity ' + d + 's ease-in-out, transform ' + m + 's cubic-bezier(.22,.9,.3,1)'
+                : 'none';
+            el.style.opacity = visivel ? '1' : '0';
+            el.style.transform = 'scale(' + (escala * (visivel || !crescer ? 1 : 0.94)) + ')';
+        }
+
         function iniciarImagem() {
             porBase();
             camadasImg.forEach((c) => {
                 c.onload = null;
                 c.onerror = null;
-                c.style.transform = cfg.zoom === 1 ? '' : 'scale(' + cfg.zoom + ')';
                 c.style.transition = 'none';
                 c.style.opacity = '0';
-                c.removeAttribute('src');
+                largar(c);
             });
             esbaterImg(base, true);
             indice = -1;
@@ -597,26 +640,32 @@
             const clip = cfg.clips[i];
             const camada = camadasImg[i % 2];
             const g = geracao;
+            const escala = escalaDe(clip);
+            const daCasa = clip.id === cfg.logoBase;
             indice = i;
 
             const entrar = () => {
                 if (!ligado || !modoImagem || g !== geracao) return;
                 registar('imagem', clip.id);
-                esbaterImg(camada, true);
-                esbaterImg(base, false);
+                // começa ligeiramente mais pequena e cresce até ao tamanho certo
+                camada.style.transition = 'none';
+                camada.style.transform = 'scale(' + (escala * (daCasa ? 1 : 0.94)) + ')';
+                void camada.offsetWidth;
+                transicaoImg(camada, true, escala, !daCasa);
+                transicaoImg(base, false, 1, false);
                 avisar(i, clip);
 
-                depois(Math.max(0.6, clip.duracao) * 1000, () => {
+                /* Fica no ecrã a animação inteira (o «Mostrar» do editor é o
+                   mínimo): cortar a meio era a troca feia para a logo parada. */
+                depois(Math.max(0.6, clip.duracao, clip.natural) * 1000, () => {
                     if (!ligado || g !== geracao) return;
-                    esbaterImg(camada, false);
-                    esbaterImg(base, true);
+                    transicaoImg(camada, false, escala, !daCasa);
+                    transicaoImg(base, true, 1, false);
                     indice = -1;
                     avisar(-1, null);
-                    /* Já invisível, larga a imagem: deixa de gastar CPU e, da
-                       próxima vez, a animação começa do primeiro fotograma
-                       (com o mesmo src, continuava a meio). */
-                    depois((cfg.transicao.duracao + 0.15) * 1000, () => {
-                        if (g === geracao && camada.style.opacity === '0') camada.removeAttribute('src');
+                    /* Já invisível, larga a imagem (deixa de gastar CPU) */
+                    depois((cfg.transicao.duracao * 1.4 + 0.2) * 1000, () => {
+                        if (g === geracao && camada.style.opacity === '0') largar(camada);
                     });
                     depois(cfg.pausa * 1000, () => {
                         if (g !== geracao) return;
@@ -636,16 +685,20 @@
                 passoImagem(i + 1);
             };
 
-            camada.onload = marcar;
-            camada.onerror = () => saltar('imagem-falhou');
-            camada.src = url(clip.webp);
-            if (camada.complete && camada.naturalWidth) marcar();
+            enderecoNovo(clip).then((endereco) => {
+                if (g !== geracao || marcado) { if (endereco.indexOf('blob:') === 0) URL.revokeObjectURL(endereco); return; }
+                largar(camada);
+                camada.onload = marcar;
+                camada.onerror = () => saltar('imagem-falhou');
+                camada.src = endereco;
+                if (camada.complete && camada.naturalWidth) marcar();
+            });
             // rede lenta ou pedido perdido: o ciclo nunca fica preso à espera
-            depois(15000, () => saltar('imagem-demorou'));
+            depois(30000, () => saltar('imagem-demorou'));
 
             /* A seguinte já vai sendo descarregada enquanto esta passa */
-            const seguinte = cfg.clips[i + 1];
-            if (seguinte) { const pre = new Image(); pre.src = url(seguinte.webp); }
+            const seguinte = cfg.clips[i + 1] || cfg.clips[0];
+            if (seguinte) enderecoNovo(seguinte).then((e) => { if (e.indexOf('blob:') === 0) URL.revokeObjectURL(e); });
         }
 
         function avisar(i, clip) {
