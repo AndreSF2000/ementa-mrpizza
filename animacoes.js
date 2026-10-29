@@ -39,6 +39,17 @@
        entre as animações (a «original»). */
     const TEMA_DA_LOGO = 'mrpizza';
 
+    /* TVs (LG webOS e afins). Aqui o vídeo vai para um plano de hardware à
+       parte: um <video> — mesmo escondido — abre um «buraco» retangular no
+       ecrã onde se vê o que está nesse plano (o vídeo do preçário da
+       camada anti-standby, que fica por baixo: era o retângulo de fundo à
+       volta da logo). Além disso só há um descodificador, que a camada
+       anti-standby ocupa: os vídeos da logo ficavam PARADOS e o canvas
+       pintava 0 fotogramas. Por isso, na TV, a logo é sempre feita com as
+       imagens animadas (WebP com transparência a sério), sem vídeo nenhum.
+       ?imagem=0 força o vídeo, para testes. */
+    const NA_TV = /web0s|webos|netcast|smart-?tv|tizen|hbbtv/i.test(navigator.userAgent || '');
+
     /* ------------------------------------------------------------------
        SUPERFÍCIE DE PINTURA — recorte do fundo verde
        ------------------------------------------------------------------
@@ -157,12 +168,31 @@
         return true;
     }
 
+    let pedidoPintura = 0;
+    let ultimoTique = 0;
+    let erroPintura = '';
+
+    function proximaPintura() {
+        pedidoPintura = requestAnimationFrame(pintar);
+    }
+
+    /* Se o ciclo de pintura morreu (a TV deixou de dar fotogramas ao
+       requestAnimationFrame), volta a ser lançado — sempre um só. */
+    function relancarPintura() {
+        if (!superficies.length) return;
+        aPintar = true;
+        if (pedidoPintura) cancelAnimationFrame(pedidoPintura);
+        proximaPintura();
+    }
+
     function pintar() {
+        pedidoPintura = 0;
         if (!aPintar) return;
-        if (document.hidden) return requestAnimationFrame(pintar);
+        ultimoTique = performance.now();
+        if (document.hidden) return proximaPintura();
 
         const agora = performance.now();
-        if (agora - ultimoPintado < 28) return requestAnimationFrame(pintar);
+        if (agora - ultimoPintado < 28) return proximaPintura();
         ultimoPintado = agora;
 
         for (let i = superficies.length - 1; i >= 0; i--) {
@@ -174,22 +204,28 @@
             // próximo
             if (s.video.seeking) continue;
             if (s.tela.style.opacity === '0') continue;
-            if (!pintarFotograma(s.video, s.tela)) continue;
+            /* Um erro aqui (descodificador perdido, canvas recusado) matava o
+               ciclo inteiro para sempre: fica registado e segue-se. */
+            let pintou = false;
+            try { pintou = pintarFotograma(s.video, s.tela); } catch (e) { erroPintura = String((e && e.name) || e); }
+            if (!pintou) continue;
             s.pintou = true;
+            s.tela._fotogramas = (s.tela._fotogramas || 0) + 1;
             fotogramas++;
         }
 
         global.__animPintura = {
             fotogramas,
             largura: larguraMax,
-            custo: Math.round(custoPintura)
+            custo: Math.round(custoPintura),
+            erro: erroPintura
         };
 
         // aparelho lento: baixa a resolução em vez de deixar o vídeo aos saltos
         if (custoPintura > 42 && larguraMax > 192) larguraMax -= 64;
 
         if (!superficies.length) { aPintar = false; return; }
-        requestAnimationFrame(pintar);
+        proximaPintura();
     }
 
     function criarSuperficie(video) {
@@ -198,14 +234,16 @@
         tela.setAttribute('aria-hidden', 'true');
         tela.style.opacity = '0';
         video.parentNode.insertBefore(tela, video.nextSibling);
+        // o vídeo em bruto (com o fundo verde) nunca se vê
         video.style.visibility = 'hidden';
+        video.style.opacity = '0';
         video._tela = tela;
 
         superficies.push({ video: video, tela: tela, pintou: false });
 
         if (!aPintar) {
             aPintar = true;
-            requestAnimationFrame(pintar);
+            proximaPintura();
         }
         return tela;
     }
@@ -222,43 +260,54 @@
         host.innerHTML = '';
         host.classList.add('leitor-logo');
 
-        /* A logo original é um vídeo em ciclo (balanço lento). O PNG fica
-           como cartaz, para nunca se ver um espaço vazio. */
-        const logo = document.createElement('video');
-        logo.className = 'logo-original';
-        logo.muted = true;
-        logo.loop = true;
-        logo.playsInline = true;
-        logo.autoplay = true;
-        logo.preload = 'auto';
-        logo.poster = LOGO;
-        logo.setAttribute('muted', '');
-        logo.setAttribute('playsinline', '');
-        logo.src = enderecoDaLogo();
-        host.appendChild(logo);
+        /* Na TV começa-se logo em modo imagem, sem criar vídeo nenhum (ver
+           NA_TV): nem por um instante pode haver um <video> no ecrã. */
+        const pedidoVideo = /[?&]imagem=0(&|$)/.test(location.search);
+        let modoImagem = false;
 
-        const telaLogo = criarSuperficie(logo);
-        telaLogo.style.opacity = '1';
-
-        const arrancarLogo = () => {
-            const p = logo.play();
-            if (p && p.catch) p.catch(() => {});
-        };
-
-        arrancarLogo();
-        logo.addEventListener('loadeddata', arrancarLogo);
-        logo.addEventListener('canplay', arrancarLogo);
-
-        const camadas = [camada(), camada()];
-
-        /* Reserva para os browsers que perdem o alfa até no canvas */
-        let png = null;
+        let logo = null;
+        let telaLogo = null;
+        let camadas = [];
 
         let qual = 0;
         let indice = -1;
         let ligado = false;
         let timers = [];
         let geracao = 0;      // cada reinício invalida as tarefas do ciclo anterior
+
+        /* A logo original é um vídeo em ciclo (balanço lento). O PNG fica
+           como cartaz, para nunca se ver um espaço vazio. */
+        function criarVideos() {
+            logo = document.createElement('video');
+            logo.className = 'logo-original';
+            logo.muted = true;
+            logo.loop = true;
+            logo.playsInline = true;
+            logo.autoplay = true;
+            logo.preload = 'auto';
+            logo.poster = LOGO;
+            logo.setAttribute('muted', '');
+            logo.setAttribute('playsinline', '');
+            logo.src = enderecoDaLogo();
+            host.appendChild(logo);
+
+            telaLogo = criarSuperficie(logo);
+            telaLogo.style.opacity = '1';
+
+            arrancarLogo();
+            logo.addEventListener('loadeddata', arrancarLogo);
+            logo.addEventListener('canplay', arrancarLogo);
+
+            camadas = [camada(), camada()];
+            global.__animModo = 'video';
+            global.__animFallback = false;
+        }
+
+        function arrancarLogo() {
+            if (!logo) return;
+            const p = logo.play();
+            if (p && p.catch) p.catch(() => {});
+        }
 
         function camada() {
             const v = document.createElement('video');
@@ -336,16 +385,21 @@
             return base + (base.includes('?') ? '&' : '?') + 'v=' + encodeURIComponent(cfg.versao || '1');
         }
 
+        function clipeDaLogo() {
+            return (cfg.todos || []).filter((d) => d.id === cfg.logoBase)[0];
+        }
+
         /* A logo que aparece entre as animações: o clipe escolhido no
            editor, ou o balanço gravado se não houver escolha. */
         function enderecoDaLogo() {
-            const base = (cfg.todos || []).filter((d) => d.id === cfg.logoBase)[0];
+            const base = clipeDaLogo();
             return url(base ? base.webm : LOGO_VIDEO);
         }
 
         function fundo(visivel) {
+            if (!logo) return;
             const d = cfg.transicao.duracao;
-            const alvo = png || estilo(logo);
+            const alvo = estilo(logo);
             alvo.style.transition = d > 0 ? 'opacity ' + d + 's ease-in-out' : 'none';
             alvo.style.opacity = visivel ? '1' : '0';
         }
@@ -364,92 +418,66 @@
             });
         }
 
-        /* Rede de segurança: se o aparelho não descodificar o vídeo da
-           logo, fica a logo em PNG com o balanço em CSS — nunca um espaço
-           vazio nem um retângulo opaco em frente da ementa.
-
-           Isto NÃO é definitivo: uma TV lenta pode levar mais de 2,5 s a
-           abrir o ficheiro, e antes ficava em PNG para sempre (a logo
-           aparecia, mas sem animação nenhuma). Agora volta-se a tentar e,
-           quando o vídeo arranca, o ciclo retoma do princípio. */
-        function mostrarPng() {
-            if (png || !logo.isConnected) return;
-            global.__animFallback = true;
-            registar('fallback-png');
-
-            png = document.createElement('img');
-            png.className = 'logo-original logo-a-vivo';
-            png.src = LOGO;
-            png.style.transition = 'opacity .6s ease-in-out';
-            /* A reserva está SEMPRE visível. Antes herdava a opacidade do
-               canvas da logo — e, se o fallback acontecesse no instante em
-               que a logo estava escondida para entrar um clipe, o PNG
-               também ficava com opacidade 0 e o ecrã ficava SEM logo
-               nenhuma (nem a original nem as animadas). */
-            png.style.opacity = '1';
-            host.insertBefore(png, logo);
-
-            telaLogo.style.opacity = '0';
-            camadas.forEach((v) => {
-                try { v.pause(); } catch (e) {}
-                estilo(v).style.opacity = '0';
-            });
-
-            geracao++;
-            limparTimers();
-            indice = -1;
-            avisar(-1, null);
-
-            /* Agendar DEPOIS de limparTimers: antes ficava antes da limpeza
-               e os temporizadores de recuperação eram cancelados na hora,
-               por isso o PNG nunca voltava ao vídeo. */
-            [4000, 9000, 20000, 40000, 90000, 180000, 300000].forEach((ms) => depois(ms, tentarVideo));
-
-            /* Um toque no telecomando também serve: em muitos aparelhos o
-               primeiro play só é aceite depois de haver interação. */
-            document.addEventListener('pointerdown', tentarVideo);
-            document.addEventListener('keydown', tentarVideo);
+        /* ------------------------------------------------------------------
+           VIGILANTE DO VÍDEO
+           ------------------------------------------------------------------
+           Corre sempre (não só no arranque) e não é cancelado pelos
+           reinícios do ciclo. Se o canvas deixar de receber fotogramas —
+           vídeo pausado pela TV, descodificador perdido, ciclo de pintura
+           morto — tenta recuperar (play, depois recarregar o ficheiro) e,
+           se ao fim de 12 s continuar sem nada, passa ao modo imagem, que
+           não depende de vídeo nenhum e nunca mostra um retângulo.
+           ------------------------------------------------------------------ */
+        function fotogramasMeus() {
+            let n = telaLogo ? (telaLogo._fotogramas || 0) : 0;
+            camadas.forEach((v) => { if (v._tela) n += v._tela._fotogramas || 0; });
+            return n;
         }
 
-        /* Volta a tentar o vídeo da logo depois de se ter mostrado o PNG. */
-        function tentarVideo() {
-            if (!png || !ligado) return;
+        let vistos = -1;
+        let desde = performance.now();
+        let recarregou = false;
+        let desligado = 0;
 
-            /* Basta o vídeo ter dados e estar a andar: o canvas começa a
-               pintar no fotograma seguinte. Não se espera pelo primeiro
-               fotograma pintado (numa TV lenta isso pode ser tarde). */
-            const pronto = () => !logo.paused && logo.readyState >= 2 && logo.videoWidth > 0;
+        const vigilante = setInterval(() => {
+            if (!host.isConnected) {
+                // leitor abandonado (o editor refez o palco): deixa de vigiar
+                if (++desligado > 30) clearInterval(vigilante);
+                return;
+            }
+            desligado = 0;
+            if (!ligado || modoImagem) return;
 
-            if (pronto()) return retomarCiclo();
+            const agora = performance.now();
+            if (document.hidden) { desde = agora; return; }
+            if (agora - ultimoTique > 3000) relancarPintura();
 
-            const p = logo.play();
-            if (p && p.catch) p.catch(() => {});
-            depois(1500, () => { if (png && ligado && pronto()) retomarCiclo(); });
-        }
+            const n = fotogramasMeus();
+            if (n !== vistos) { vistos = n; desde = agora; recarregou = false; return; }
 
-        function retomarCiclo() {
-            if (!png) return;
-            png.remove();
-            png = null;
-            global.__animFallback = false;
-            telaLogo.style.opacity = '1';
-            registar('retomar-video');
-            iniciar();
-        }
+            const parado = agora - desde;
+            if (logo && logo.paused) { registar('logo-parada'); arrancarLogo(); }
+            if (parado > 6000 && !recarregou && logo) {
+                recarregou = true;
+                registar('recarregar-logo');
+                try { logo.load(); } catch (e) {}
+                arrancarLogo();
+            }
+            if (parado > 12000) entrarModoImagem('sem pintura há ' + Math.round(parado / 1000) + ' s');
+        }, 2000);
 
         /* ------------------------------------------------------------------
            MODO IMAGEM
            ------------------------------------------------------------------
-           Algumas TVs (LG, por exemplo) não conseguem desenhar um vídeo num
-           canvas: o pedido não dá erro, simplesmente não sai nada — 0
-           fotogramas. Aqui as mesmas animações são imagens animadas (WebP)
-           com transparência a sério, que qualquer browser sabe pintar.
+           As mesmas animações em imagens animadas (WebP) com transparência a
+           sério, que qualquer browser sabe pintar — sem vídeo, sem canvas,
+           sem recorte. É o modo da TV e a reserva de qualquer aparelho onde
+           o vídeo falhe.
 
-           A logo original, nesse modo, é o PNG com o balanço em CSS (a
-           mesma animação suave), porque a versão em imagem dela teria
-           dezenas de megabytes.
+           A logo original é a versão WebP do clipe escolhido para isso (a
+           MR Pizza animada). Enquanto descarrega — ou se faltar — fica o PNG
+           com o balanço em CSS: nunca um espaço vazio.
            ------------------------------------------------------------------ */
-        let modoImagem = false;
         let base = null;
         let camadasImg = [];
 
@@ -472,54 +500,97 @@
             img.style.opacity = '0';
             img.style.pointerEvents = 'none';
             img.style.transformOrigin = '50% 48.5%';
-            img.style.transform = cfg.zoom === 1 ? '' : 'scale(' + cfg.zoom + ')';
             host.appendChild(img);
             return img;
         }
 
+        /* Põe na base a logo animada; só troca depois de o ficheiro chegar */
+        function porBase() {
+            const clip = clipeDaLogo();
+            const quer = clip ? url(clip.webp) : '';
+            if (base._quer === quer) return;
+            base._quer = quer;
+
+            base.className = 'logo-original logo-a-vivo';
+            base.src = LOGO;
+            global.__animBase = 'png';
+            if (!quer) return;
+
+            const pre = new Image();
+            pre.onload = () => {
+                if (base._quer !== quer) return;
+                base.className = 'logo-original';   // a animação já traz o movimento
+                base.src = quer;
+                global.__animBase = 'webp';
+            };
+            pre.onerror = () => registar('base-falhou', clip.id);
+            pre.src = quer;
+        }
+
         function entrarModoImagem(motivo) {
-            if (modoImagem || !ligado) return;
+            if (modoImagem) return;
             modoImagem = true;
             global.__animModo = 'imagem';
             global.__animFallback = false;
             registar('modo-imagem', motivo || '');
 
-            geracao++;
-            limparTimers();
-
-            if (png) { try { png.remove(); } catch (e) {} png = null; }
-            superficies.splice(0).forEach((s) => {
-                try { s.video.pause(); } catch (e) {}
-                try { s.tela.remove(); } catch (e) {}
-                try { s.video.remove(); } catch (e) {}
+            /* Os vídeos saem mesmo do ecrã (e largam o descodificador): na
+               LG, um <video> escondido continuava a abrir o retângulo. */
+            const meus = [logo].concat(camadas).filter(Boolean);
+            for (let i = superficies.length - 1; i >= 0; i--) {
+                if (meus.indexOf(superficies[i].video) < 0) continue;
+                try { superficies[i].tela.remove(); } catch (e) {}
+                superficies.splice(i, 1);
+            }
+            meus.forEach((v) => {
+                v.onplaying = null;
+                v.onerror = null;
+                try { v.pause(); } catch (e) {}
+                try { v.removeAttribute('src'); v.load(); } catch (e) {}
+                try { v.remove(); } catch (e) {}
             });
-            camadas.forEach((v) => { try { v.pause(); } catch (e) {} try { v.remove(); } catch (e) {} });
-            try { logo.remove(); } catch (e) {}
+            logo = null;
+            telaLogo = null;
+            camadas = [];
 
             base = document.createElement('img');
-            base.className = 'logo-original logo-a-vivo';
             base.alt = '';
-            base.src = LOGO;
             base.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;' +
-                'object-fit:contain;opacity:1;transition:opacity .6s ease-in-out;pointer-events:none';
+                'object-fit:contain;opacity:1;pointer-events:none';
             host.appendChild(base);
 
             camadasImg = [criarCamadaImg(), criarCamadaImg()];
+
+            if (ligado) iniciar();
+        }
+
+        function iniciarImagem() {
+            porBase();
+            camadasImg.forEach((c) => {
+                c.onload = null;
+                c.onerror = null;
+                c.style.transform = cfg.zoom === 1 ? '' : 'scale(' + cfg.zoom + ')';
+                c.style.transition = 'none';
+                c.style.opacity = '0';
+                c.removeAttribute('src');
+            });
+            esbaterImg(base, true);
             indice = -1;
             avisar(-1, null);
-
             depois(cfg.transicao.logoInicial * 1000, () => passoImagem(0));
         }
 
         function passoImagem(i) {
             if (!ligado || !modoImagem) return;
+            if (!cfg.clips.length) { esbaterImg(base, true); return; }
 
             if (i >= cfg.clips.length) {
                 esbaterImg(base, true);
                 camadasImg.forEach((c) => esbaterImg(c, false));
                 indice = -1;
                 avisar(-1, null);
-                depois(cfg.pausa * 1000, () => passoImagem(0));
+                // pelo menos 1 s: se todas as imagens falharem, não fica num ciclo sem fim
+                depois(Math.max(1, cfg.pausa) * 1000, () => passoImagem(0));
                 return;
             }
 
@@ -541,6 +612,12 @@
                     esbaterImg(base, true);
                     indice = -1;
                     avisar(-1, null);
+                    /* Já invisível, larga a imagem: deixa de gastar CPU e, da
+                       próxima vez, a animação começa do primeiro fotograma
+                       (com o mesmo src, continuava a meio). */
+                    depois((cfg.transicao.duracao + 0.15) * 1000, () => {
+                        if (g === geracao && camada.style.opacity === '0') camada.removeAttribute('src');
+                    });
                     depois(cfg.pausa * 1000, () => {
                         if (g !== geracao) return;
                         passoImagem(i + 1);
@@ -552,14 +629,19 @@
                podiam disparar os dois e o clipe aparecia duas vezes. */
             let marcado = false;
             const marcar = () => { if (marcado) return; marcado = true; depois(120, entrar); };
-
-            camada.onload = marcar;
-            camada.onerror = () => {
-                registar('imagem-falhou', clip.id);
+            const saltar = (porque) => {
+                if (marcado || g !== geracao) return;
+                marcado = true;
+                registar(porque, clip.id);
                 passoImagem(i + 1);
             };
+
+            camada.onload = marcar;
+            camada.onerror = () => saltar('imagem-falhou');
             camada.src = url(clip.webp);
             if (camada.complete && camada.naturalWidth) marcar();
+            // rede lenta ou pedido perdido: o ciclo nunca fica preso à espera
+            depois(15000, () => saltar('imagem-demorou'));
 
             /* A seguinte já vai sendo descarregada enquanto esta passa */
             const seguinte = cfg.clips[i + 1];
@@ -589,7 +671,6 @@
         function tocar(posicao, restante, fade) {
             if (!ligado) return;
             if (modoImagem) return;   // o ciclo é feito por imagens
-            if (png) { fundo(true); return; }
             if (!cfg.clips.length) { fundo(true); return; }
 
             indice = posicao % cfg.clips.length;
@@ -763,11 +844,12 @@
         }
 
         function iniciar() {
-            if (modoImagem) return;
             registar('iniciar');
             geracao++;
             ligado = true;
             limparTimers();
+            host.style.aspectRatio = String(cfg.proporcao);
+            if (modoImagem) return iniciarImagem();
 
             /* Se a logo escolhida para entre as animações mudou, troca-se
                já o ficheiro, sem esperar por um recarregamento. */
@@ -780,7 +862,6 @@
             camadas.forEach((v) => { v.onplaying = null; v.onerror = null; });
             pararCamadas();
             fundo(true);
-            host.style.aspectRatio = String(cfg.proporcao);
 
             /* As animações são ampliadas em volta do centro do desenho (48,5%
              * da altura), por isso crescem sem sair do sítio. */
@@ -799,43 +880,21 @@
             pararCamadas();
         }
 
-        /* Se ao fim de 2,5 s a logo ainda não pintou nada (vídeo que não
-           abre neste aparelho), mostra-se o PNG em vez de um espaço vazio. */
-        /* 8 s e não 2,5: numa TV, descarregar 1,2 MB e abrir o descodificador
-           pode levar bem mais que isso. Só se desiste se mesmo assim não
-           houver nada — e mesmo aí volta-se a tentar (ver mostrarPng). */
-        setTimeout(() => {
-            const s = superficies.find((x) => x.video === logo);
-            if (!s || s.pintou) return;
-            if (!logo.paused && logo.readyState >= 2 && logo.videoWidth > 0) return;
-            mostrarPng();
-        }, 8000);
+        if (op.modoImagem) entrarModoImagem('pedido');
+        else if (NA_TV && !pedidoVideo) entrarModoImagem('TV');
+        else criarVideos();
 
         iniciar();
-
-        /* Se for pedido, começa já em modo imagem (para testar na TV) */
-        if (op.modoImagem) depois(200, () => entrarModoImagem('pedido'));
-
-        /*
-         * Rede de segurança para as TVs que não pintam vídeo no canvas:
-         * se ao fim de 12 s não houver um único fotograma desenhado, passa
-         * a usar as imagens animadas — que qualquer browser pinta.
-         */
-        depois(12000, () => {
-            if (modoImagem || !ligado) return;
-            const f = (global.__animPintura || {}).fotogramas || 0;
-            if (f > 0) return;
-            entrarModoImagem('canvas sem fotogramas');
-        });
 
         /*
          * O browser pode recusar o primeiro play — por exemplo quando a
          * logo é criada ainda fora do ecrã (é o que acontecia no palco do
          * editor, onde a logo ficava a imagem parada). Insiste-se pouco
-         * depois, na primeira interação e quando o ecrã volta.
+         * depois, na primeira interação e quando o ecrã volta. (Depois
+         * disso, quem vigia é o vigilante.)
          */
         const insistir = () => {
-            if (!logo.isConnected) return;
+            if (!logo || !logo.isConnected) return;
             if (logo.paused) arrancarLogo();
         };
         [400, 1500, 4000, 9000].forEach((ms) => depois(ms, insistir));

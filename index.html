@@ -888,7 +888,11 @@ document.addEventListener('touchstart', iniciarAudioSilencioso, { once: true });
 /* ------------------------------------------------------------------
    FORÇAR ATUALIZAÇÃO REMOTA
    ------------------------------------------------------------------ */
-let versaoForcadaAtual = localStorage.getItem('mrpizza_forcar_v') || '0';
+/* localStorage pode falhar no browser da TV: sem try, o resto do script morria */
+function lerGuardado(chave) { try { return localStorage.getItem(chave); } catch (e) { return null; } }
+function guardar(chave, valor) { try { localStorage.setItem(chave, valor); } catch (e) {} }
+
+let versaoForcadaAtual = lerGuardado('mrpizza_forcar_v') || '0';
 const URL_FORCAR = './forcar.json';
 
 async function verificarForcar() {
@@ -899,11 +903,11 @@ async function verificarForcar() {
         const nova = String(data.versao || 0);
         if (versaoForcadaAtual === '0') {
             versaoForcadaAtual = nova;
-            localStorage.setItem('mrpizza_forcar_v', nova);
+            guardar('mrpizza_forcar_v', nova);
             return;
         }
         if (nova !== versaoForcadaAtual) {
-            localStorage.setItem('mrpizza_forcar_v', nova);
+            guardar('mrpizza_forcar_v', nova);
             setTimeout(() => location.reload(), 300);
         }
     } catch (e) {}
@@ -1058,7 +1062,8 @@ function textoDoDiag() {
         linhaDoDiag('logo', document.querySelector('video.logo-original')),
         'logo em uso: ' + (window.__animModo === 'imagem'
             ? 'imagens animadas (WebP)'
-            : (window.__animFallback ? 'PNG de reserva (o vídeo não abriu)' : 'vídeo animado')),
+            : 'vídeo animado') + ' · base ' + (window.__animBase || '—') +
+            (window.__animPintura && window.__animPintura.erro ? ' · erro ' + window.__animPintura.erro : ''),
         'modo da logo: ' + (window.__animModo || 'vídeo (canvas)'),
         'pintura: ' + (window.__animPintura
             ? window.__animPintura.fotogramas + ' fotogramas · ' +
@@ -1200,6 +1205,18 @@ function iniciarVerificacaoAtualizacoes() {
     versaoCarregada = versaoLocal();
     versaoNoServidor().then((v) => { if (v) versaoServidorVista = v; });
     setInterval(verificarAtualizacao, INTERVALO_VERIFICACAO);
+    setInterval(recarregarDeManha, 5 * 60 * 1000);
+}
+
+/*
+ * A página fica aberta dias seguidos e o browser da TV vai acumulando
+ * memória até falhar. Recarrega uma vez por dia, às 6h (restaurante
+ * fechado), e só se a rede estiver a responder — senão a TV ficava na
+ * página de erro do browser.
+ */
+async function recarregarDeManha() {
+    if (new Date().getHours() !== 6 || Date.now() - ARRANQUE < 2 * 3600 * 1000) return;
+    if (await versaoNoServidor()) recarregarComVersaoNova();
 }
 </script>
 
