@@ -260,8 +260,8 @@
         host.innerHTML = '';
         host.classList.add('leitor-logo');
 
-        /* Na TV começa-se logo em modo imagem, sem criar vídeo nenhum (ver
-           NA_TV): nem por um instante pode haver um <video> no ecrã. */
+        /* Começa-se logo em modo imagem, sem criar vídeo nenhum: nem por um
+           instante pode haver um <video> da logo no ecrã. */
         const pedidoVideo = /[?&]imagem=0(&|$)/.test(location.search);
         let modoImagem = false;
 
@@ -880,9 +880,11 @@
             pararCamadas();
         }
 
-        if (op.modoImagem) entrarModoImagem('pedido');
-        else if (NA_TV && !pedidoVideo) entrarModoImagem('TV');
-        else criarVideos();
+        /* Imagens (WebP com transparência real) em todo o lado: qualquer TV
+           abre um «buraco» retangular por cada <video>, e detetar a TV pelo
+           browser falhava em algumas. ?imagem=0 força o vídeo, para testes. */
+        if (pedidoVideo && !op.modoImagem) criarVideos();
+        else entrarModoImagem(op.modoImagem ? 'pedido' : (NA_TV ? 'TV' : 'omissão'));
 
         iniciar();
 
