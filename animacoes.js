@@ -344,8 +344,10 @@
 
             /* A logo entre animações: a escolhida no editor ou, se essa
                já não existir, a que vive na pasta MR Pizza. */
-            let logoBase = String(c.logoBase || '');
-            if (!todos.filter((d) => d.id === logoBase).length) {
+            /* '' é uma escolha («Logo original a balançar»); só quando não há
+               escolha nenhuma (ou o clipe já não existe) se usa a MR Pizza. */
+            let logoBase = c.logoBase == null ? null : String(c.logoBase);
+            if (logoBase !== '' && !todos.filter((d) => d.id === logoBase).length) {
                 const padrao = todos.filter((d) => d.tema === TEMA_DA_LOGO)[0];
                 logoBase = padrao ? padrao.id : '';
             }

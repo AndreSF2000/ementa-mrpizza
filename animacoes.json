@@ -17,7 +17,7 @@
       "miniatura": "animacoes/mrpizza-logo.png",
       "duracao": 4,
       "ativo": true,
-      "natural": 28.7,
+      "natural": 28.75,
       "tema": "mrpizza"
     },
     {
@@ -27,7 +27,7 @@
       "miniatura": "animacoes/1-balanco.png",
       "duracao": 2.7,
       "ativo": false,
-      "natural": 2.93,
+      "natural": 2.96,
       "tema": "halloween"
     },
     {
@@ -37,7 +37,7 @@
       "miniatura": "animacoes/2-olhos.png",
       "duracao": 2.8,
       "ativo": false,
-      "natural": 3.07,
+      "natural": 3,
       "tema": "halloween"
     },
     {
@@ -47,7 +47,7 @@
       "miniatura": "animacoes/3-vampiro.png",
       "duracao": 3.9,
       "ativo": false,
-      "natural": 3.97,
+      "natural": 4,
       "tema": "halloween"
     },
     {
@@ -57,7 +57,7 @@
       "miniatura": "animacoes/4-capa.png",
       "duracao": 2.8,
       "ativo": false,
-      "natural": 3.07,
+      "natural": 2.38,
       "tema": "halloween"
     },
     {
@@ -67,9 +67,9 @@
       "miniatura": "animacoes/5-final.png",
       "duracao": 1.8,
       "ativo": false,
-      "natural": 1.93,
+      "natural": 1.96,
       "tema": "halloween"
     }
   ],
-  "versao": "1793279431523"
+  "versao": "1793281080181"
 }
