@@ -16,7 +16,7 @@
       "webm": "animacoes/mrpizza-logo.webm",
       "miniatura": "animacoes/mrpizza-logo.png",
       "duracao": 4,
-      "ativo": true,
+      "ativo": false,
       "natural": 28.7,
       "tema": "mrpizza"
     },
@@ -170,5 +170,5 @@
       "tamanhoDaLogo": true
     }
   ],
-  "versao": "1795305155593"
+  "versao": "1795305344238"
 }
