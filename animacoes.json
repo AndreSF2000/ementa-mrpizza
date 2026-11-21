@@ -69,7 +69,106 @@
       "ativo": false,
       "natural": 1.93,
       "tema": "halloween"
+    },
+    {
+      "id": "natal-gorro",
+      "nome": "Gorro do Pai Natal",
+      "webm": "animacoes/natal-gorro.webm",
+      "miniatura": "animacoes/natal-gorro.png",
+      "duracao": 5,
+      "ativo": true,
+      "natural": 5,
+      "tema": "natal",
+      "tamanhoDaLogo": true
+    },
+    {
+      "id": "natal-neve",
+      "nome": "Neve no chapéu",
+      "webm": "animacoes/natal-neve.webm",
+      "miniatura": "animacoes/natal-neve.png",
+      "duracao": 5,
+      "ativo": true,
+      "natural": 5,
+      "tema": "natal",
+      "tamanhoDaLogo": true
+    },
+    {
+      "id": "natal-azevinho",
+      "nome": "Azevinho e brilhos",
+      "webm": "animacoes/natal-azevinho.webm",
+      "miniatura": "animacoes/natal-azevinho.png",
+      "duracao": 5,
+      "ativo": true,
+      "natural": 5,
+      "tema": "natal",
+      "tamanhoDaLogo": true
+    },
+    {
+      "id": "natal-luzes",
+      "nome": "Luzes de Natal",
+      "webm": "animacoes/natal-luzes.webm",
+      "miniatura": "animacoes/natal-luzes.png",
+      "duracao": 5,
+      "ativo": true,
+      "natural": 5,
+      "tema": "natal",
+      "tamanhoDaLogo": true
+    },
+    {
+      "id": "natal-estrela",
+      "nome": "Estrela de Natal",
+      "webm": "animacoes/natal-estrela.webm",
+      "miniatura": "animacoes/natal-estrela.png",
+      "duracao": 5,
+      "ativo": true,
+      "natural": 5,
+      "tema": "natal",
+      "tamanhoDaLogo": true
+    },
+    {
+      "id": "natal-bolas",
+      "nome": "Bolas de Natal",
+      "webm": "animacoes/natal-bolas.webm",
+      "miniatura": "animacoes/natal-bolas.png",
+      "duracao": 5,
+      "ativo": true,
+      "natural": 5,
+      "tema": "natal",
+      "tamanhoDaLogo": true
+    },
+    {
+      "id": "natal-rena",
+      "nome": "Rena",
+      "webm": "animacoes/natal-rena.webm",
+      "miniatura": "animacoes/natal-rena.png",
+      "duracao": 5,
+      "ativo": true,
+      "natural": 5,
+      "tema": "natal",
+      "tamanhoDaLogo": true
+    },
+    {
+      "id": "natal-presentes",
+      "nome": "Presentes",
+      "webm": "animacoes/natal-presentes.webm",
+      "miniatura": "animacoes/natal-presentes.png",
+      "duracao": 5,
+      "ativo": true,
+      "natural": 5,
+      "tema": "natal",
+      "tamanhoDaLogo": true
+    },
+    {
+      "id": "natal-arvore",
+      "nome": "Árvore de Natal",
+      "webm": "animacoes/natal-arvore.webm",
+      "miniatura": "animacoes/natal-arvore.png",
+      "duracao": 5,
+      "ativo": true,
+      "natural": 5,
+      "tema": "natal",
+      "tamanhoDaLogo": true
     }
   ],
-  "versao": "1793907482629"
+  "versao": "1795305155593"
 }

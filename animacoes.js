@@ -337,6 +337,9 @@
                     webp: d.webp || String(d.webm || '').replace(/\.webm$/i, '.webp'),
                     ativo: d.ativo !== false,
                     tema: String(d.tema || '').toLowerCase(),
+                    /* Desenhada por cima da logo parada (começa e acaba nela):
+                       fica do tamanho da logo, sem o «Tamanho» das épocas. */
+                    tamanhoDaLogo: d.tamanhoDaLogo === true,
                     duracao: Math.max(0.4, Number(d.duracao) || 2),
                     natural: Math.max(0.4, Number(d.natural) || Number(d.duracao) || 2.5)
                 }));
@@ -556,7 +559,7 @@
         /* A logo da casa não é ampliada (fica do tamanho da logo parada);
            o «Tamanho» do editor é para as animações das épocas. */
         function escalaDe(clip) {
-            return clip.id === cfg.logoBase ? 1 : cfg.zoom;
+            return clip.id === cfg.logoBase || clip.tamanhoDaLogo ? 1 : cfg.zoom;
         }
 
         function entrarModoImagem(motivo) {
@@ -643,7 +646,7 @@
             const camada = camadasImg[i % 2];
             const g = geracao;
             const escala = escalaDe(clip);
-            const daCasa = clip.id === cfg.logoBase;
+            const daCasa = clip.id === cfg.logoBase || clip.tamanhoDaLogo;
             indice = i;
 
             const entrar = () => {
@@ -736,6 +739,8 @@
 
             const entrada = camadas[qual];
             const saida = camadas[1 - qual];
+            const escala = escalaDe(clip);
+            estilo(entrada).style.transform = escala === 1 ? '' : 'scale(' + escala + ')';
 
             let arrancou = false;
 
